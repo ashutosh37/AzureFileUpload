@@ -172,21 +172,21 @@ Using Azure Front Door can provide benefits like a global CDN, WAF, custom domai
 
 **2. For Backend API (AzureBlobUploadApi):**
    This is required so your React frontend can call your backend API endpoints. This is already configured in `Program.cs` to allow `http://localhost:5173`.
-   ```csharp
-   // In Program.cs
-   builder.Services.AddCors(options =>
-   {
-       options.AddPolicy(name: MyAllowSpecificOrigins,
-                         policy  =>
-                         {
-                             policy.WithOrigins("http://localhost:5173") // Your frontend's origin
-                                   .AllowAnyHeader()
-                                   .AllowAnyMethod();
-                         });
-   });
-   // ...
-   app.UseCors(MyAllowSpecificOrigins);
-    ```
+```csharp
+// In Program.cs
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: MyAllowSpecificOrigins,
+                      policy  =>
+                      {
+                          policy.WithOrigins("http://localhost:5173") // Your frontend's origin
+                                .AllowAnyHeader()
+                                .AllowAnyMethod();
+                      });
+});
+// ...
+app.UseCors(MyAllowSpecificOrigins);
+```
 
 ## Deployment
 
