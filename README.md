@@ -186,7 +186,7 @@ Using Azure Front Door can provide benefits like a global CDN, WAF, custom domai
    });
    // ...
    app.UseCors(MyAllowSpecificOrigins);
-
+    ```
 
 ## Deployment
 
