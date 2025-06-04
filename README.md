@@ -31,7 +31,30 @@ This application allows users to upload files (evidence) to Azure Blob Storage v
 
 ## Project Structure
 
-. ├── AzureBlobUploadApi/ # Backend .NET Core API │ ├── Controllers/ │ ├── Models/ │ ├── Services/ │ ├── appsettings.json │ ├── Program.cs │ └── AzureBlobUploadApi.csproj ├── EvidenceUploadApp/ # Frontend React App │ ├── public/ │ ├── src/ │ │ ├── App.css │ │ ├── App.tsx │ │ ├── FileUploadForm.tsx │ │ └── main.tsx │ ├── .env │ ├── index.html │ ├── package.json │ ├── tailwind.config.js │ ├── tsconfig.json │ └── vite.config.ts └── README.md
+```
+├── AzureBlobUploadApi/                  # Backend .NET Core API
+│   ├── Controllers/
+│   ├── Models/
+│   ├── Services/
+│   ├── appsettings.json
+│   ├── Program.cs
+│   └── AzureBlobUploadApi.csproj
+├── EvidenceUploadApp/                  # Frontend React App
+│   ├── public/
+│   ├── src/
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── FileUploadForm.tsx
+│   │   └── main.tsx
+│   ├── .env
+│   ├── index.html
+│   ├── package.json
+│   ├── tailwind.config.js
+│   ├── tsconfig.json
+│   └── vite.config.ts
+└── README.md
+```
+
 
 
 ## Backend API Setup (AzureBlobUploadApi)
@@ -47,7 +70,7 @@ This is a .NET Core Web API responsible for:
     ```bash
     cd AzureBlobUploadApi
     ```
-2.  Open `appsettings.json` (and `appsettings.Development.json` for development-specific overrides).
+2.  Open `appsettings.json` (and `appsettings.Development.json` for development-specific overrides - create appsettings.json if not already there) .
 3.  Configure the `StorageAccountsForSasUpload` section:
     ```json
     "StorageAccountsForSasUpload": [
