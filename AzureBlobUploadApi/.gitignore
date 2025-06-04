@@ -1,0 +1,7 @@
+# Ignore appsettings files containing secrets
+appsettings.json
+appsettings.Development.json # Also good practice to ignore development settings
+
+# Ignore build output directories
+bin/
+obj/
