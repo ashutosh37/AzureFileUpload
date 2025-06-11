@@ -1,17 +1,41 @@
 using MyBlobUploadApi.Services;
 using MyBlobUploadApi.Models; // Added for StorageAccountDetail
 using Microsoft.OpenApi.Models; // Required for OpenApiSchema
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Identity.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+
+// Add services to the container.
+
+// Configure Azure AD authentication
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
+
+builder.Services.AddAuthorization(); // You can add policies here if needed later
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "My Blob Upload API", Version = "v1" });
     options.MapType<IFormFile>(() => new OpenApiSchema
     {
         Type = "string",
         Format = "binary"
+    });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey, // Using ApiKey for simplicity in Swagger UI for Bearer tokens
+        Scheme = "Bearer"
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement()
+    {
+        { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, new List<string>() }
     });
 });
 
@@ -21,7 +45,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy(name: MyAllowSpecificOrigins,
                       policy  =>
                       {
-                          policy.WithOrigins("http://localhost:5173") // Your frontend's origin
+                          // Read from configuration or use a default
+                          policy.WithOrigins(builder.Configuration.GetValue<string>("FrontendAppUrl") ?? "http://localhost:5173")
                                 .AllowAnyHeader()
                                 .AllowAnyMethod();
                       });
@@ -34,17 +59,16 @@ builder.Services.AddSingleton<BlobStorageService>();
 builder.Services.Configure<List<StorageAccountDetail>>(
     builder.Configuration.GetSection("StorageAccountsForSasUpload"));
 
-// Authorization services might still be needed if you plan to use other authorization mechanisms.
-// If not, this can also be removed. For now, let's keep it if controllers might have [AllowAnonymous] or other policies.
-// builder.Services.AddAuthorization(); // Commented out or remove if no authorization is used.
-
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "My Blob Upload API V1");
+    });
 }
 
 app.UseHttpsRedirection();
@@ -52,8 +76,8 @@ app.UseHttpsRedirection();
 // Use CORS middleware - IMPORTANT: Call UseCors before UseAuthorization and MapControllers.
 app.UseCors(MyAllowSpecificOrigins);
 
-// app.UseAuthentication(); // Removed authentication middleware
-// app.UseAuthorization(); // Commented out or remove if no authorization is used.
+app.UseAuthentication(); // Enable authentication middleware
+app.UseAuthorization(); // Enable authorization middleware
 
 app.MapControllers();
 

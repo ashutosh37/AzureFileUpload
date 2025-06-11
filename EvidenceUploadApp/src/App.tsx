@@ -1,24 +1,64 @@
 import './App.css'
-
 import FileUploadForm from './FileUploadForm';
+import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from "@azure/msal-react";
+import { loginRequest } from "./authConfig";
 
 function App() {
-  // The min-h-screen class ensures the body takes at least the full viewport height.
-  // flex flex-col makes the body a flex container stacking children vertically.
-  // justify-between pushes the header to the top, footer to the bottom, and content in between.
+  const { instance, accounts } = useMsal();
+
+  const handleLogin = () => {
+    instance.loginPopup(loginRequest).catch(e => {
+      console.error("Login failed: ", e);
+    });
+  };
+
+  const handleLogout = () => {
+    instance.logoutPopup({
+      mainWindowRedirectUri: "/" // Redirect to home page after logout
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-between">
-      {/* Header */}
       <header className="bg-blue-700 text-white p-4 shadow-md">
-        <div className="container mx-auto text-center text-xl font-semibold">Evidence Upload Portal</div>
+        <div className="container mx-auto flex justify-between items-center">
+          <div className="text-xl font-semibold">Evidence Upload Portal</div>
+          <div>
+            <AuthenticatedTemplate>
+              <span className="mr-4">
+                Welcome, {accounts[0]?.name || accounts[0]?.username}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md transition duration-150 ease-in-out"
+              >
+                Logout
+              </button>
+            </AuthenticatedTemplate>
+            <UnauthenticatedTemplate>
+              <button
+                onClick={handleLogin}
+                className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md transition duration-150 ease-in-out"
+              >
+                Login
+              </button>
+            </UnauthenticatedTemplate>
+          </div>
+        </div>
       </header>
 
-      {/* Main Content Area - Centered */}
-      <main className="flex-grow w-full max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> {/* Adjusted for wider content */}
-        <FileUploadForm />
+      <main className="flex-grow w-full max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <AuthenticatedTemplate>
+          <FileUploadForm />
+        </AuthenticatedTemplate>
+        <UnauthenticatedTemplate>
+          <div className="text-center p-10 bg-white rounded-xl shadow-md">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-700">Please log in to access the portal.</h2>
+            <p className="text-gray-600">Use the login button in the header to continue.</p>
+          </div>
+        </UnauthenticatedTemplate>
       </main>
 
-      {/* Footer */}
       <footer className="bg-gray-800 text-white p-4 text-center text-sm">
         © {new Date().getFullYear()} Evidence Upload App. All rights reserved.
       </footer>

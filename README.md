@@ -182,6 +182,7 @@ builder.Services.AddCors(options =>
                           policy.WithOrigins("http://localhost:5173") // Your frontend's origin
                                 .AllowAnyHeader()
                                 .AllowAnyMethod();
+                          // For production, update this to your deployed frontend URL or read from configuration.
                       });
 });
 // ...
@@ -213,6 +214,10 @@ app.UseCors(MyAllowSpecificOrigins);
         *   `StorageAccountsForSasUpload:0:AccountName`
         *   `StorageAccountsForSasUpload:0:AccountKey` (Store this as a secret, ideally link to Key Vault)
         *   `StorageAccountsForSasUpload:0:ContainerName`
+        *   `AzureAd:TenantId`
+        *   `AzureAd:ClientId`
+        *   `AzureAd:Audience` (if used)
+        *   `FrontendAppUrl` (set to your deployed frontend URL)
     *   Update the CORS settings in `Program.cs` or App Service CORS settings to allow your deployed frontend's origin.
 
 ### Frontend to Static Hosting (e.g., Azure Static Web Apps)
@@ -253,7 +258,13 @@ Azure Static Web Apps is an excellent choice for hosting React apps and can inte
     *   Verify the `backendApiBaseUrl` in the frontend is correct.
     *   Check API routes in `FileUploadController.cs`.
 *   **SAS Token Issues:**
+    *   (These are less likely to be the primary issue if authentication is failing before SAS generation is even attempted).
     *   Ensure `AccountName` and `AccountKey` in the backend config are correct.
     *   Check SAS token permissions (`BlobSasPermissions` in `BlobStorageService.cs`).
     *   Verify SAS token expiry time.
-
+*   **Authentication/Authorization Errors (401/403 from API):**
+    *   Verify `ClientId`, `TenantId`, and `Audience` (if used) in the API's `appsettings.json`.
+    *   Verify `FRONTEND_APP_CLIENT_ID`, `TENANT_ID`, and `API_APP_CLIENT_ID_URI` in the frontend's `authConfig.ts`.
+    *   Ensure the scopes in `apiRequest.scopes` in `authConfig.ts` exactly match a scope exposed by your backend API and granted as a permission to your frontend App Registration.
+    *   Use a tool like jwt.ms to decode the access token sent from the frontend. Check the `aud` (audience), `iss` (issuer), `scp` (scope), and `appid` (for frontend client ID) claims.
+    *   Ensure "Grant admin consent" was performed in Azure AD for the API permissions if required.

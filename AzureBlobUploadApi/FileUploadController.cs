@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MyBlobUploadApi.Services;
 using MyBlobUploadApi.Models; // Added for SasUploadInfo
+using Microsoft.AspNetCore.Authorization; // Add this line
 using System;
 using System.Linq;
 using System.Net.Http;
@@ -10,9 +11,9 @@ using System.Security.Cryptography;
 
 namespace MyBlobUploadApi.Controllers
 {
+    [Authorize] // Protect all actions in this controller
     [ApiController]
     [Route("api/files")]
-    // [Authorize] // Removed [Authorize] attribute
     public class FileUploadController : ControllerBase
     {
         private readonly BlobStorageService _blobStorageService;
