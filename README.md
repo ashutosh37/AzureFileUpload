@@ -43,12 +43,14 @@ This application allows users to upload files (evidence) to Azure Blob Storage v
 │   ├── public/
 │   ├── src/
 │   │   ├── App.css
+│   │   ├── authConfig.ts
 │   │   ├── App.tsx
 │   │   ├── FileUploadForm.tsx
 │   │   └── main.tsx
 │   ├── .env
 │   ├── index.html
 │   ├── package.json
+│   ├── README-frontend.md
 │   ├── tailwind.config.js
 │   ├── tsconfig.json
 │   └── vite.config.ts
