@@ -12,7 +12,7 @@ using System.Security.Cryptography;
 
 namespace MyBlobUploadApi.Controllers
 {
-    [Authorize] // Protect all actions in this controller
+    //[Authorize] // Protect all actions in this controller
     [ApiController]
     [Route("api/files")]
     public class FileUploadController : ControllerBase
