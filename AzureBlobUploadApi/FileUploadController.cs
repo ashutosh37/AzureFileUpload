@@ -5,6 +5,7 @@ using MyBlobUploadApi.Models; // Added for SasUploadInfo
 using Microsoft.AspNetCore.Authorization; // Add this line
 using System;
 using System.Linq;
+using System.Net; // Required for WebProxy
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -18,12 +19,18 @@ namespace MyBlobUploadApi.Controllers
     {
         private readonly BlobStorageService _blobStorageService;
         private readonly ILogger<FileUploadController> _logger;
+        private readonly IConfiguration _configuration; // To read proxy settings
 
-        public FileUploadController(BlobStorageService blobStorageService, ILogger<FileUploadController> logger)
+        public FileUploadController(
+            BlobStorageService blobStorageService,
+            ILogger<FileUploadController> logger,
+            IConfiguration configuration) // Inject IConfiguration
         {
             _blobStorageService = blobStorageService;
             _logger = logger;
+            _configuration = configuration; // Store IConfiguration
         }
+
 
         [HttpPost("generate-upload-urls")]
         [ProducesResponseType(typeof(IEnumerable<SasUploadInfo>), StatusCodes.Status200OK)]
@@ -102,8 +109,25 @@ namespace MyBlobUploadApi.Controllers
                     _logger.LogWarning("File upload conflict: Blob '{BlobName}' already exists in container '{ContainerName}'.", file.FileName, extractedContainerName);
                     return Conflict(new { Message = $"File '{file.FileName}' already exists in container '{extractedContainerName}'." });
                 }
-                using (var httpClient = new HttpClient())
+
+                var httpClientHandler = new HttpClientHandler();
+                string proxyUrl = _configuration["ProxySettings:UploadSasProxyUrl"]; // Read from appsettings.json
+
+                if (!string.IsNullOrWhiteSpace(proxyUrl))
+                {
+                    var webProxy = new WebProxy(new Uri(proxyUrl), BypassOnLocal: false)
+                    {
+                        // Use the default network credentials of the application's process
+                        UseDefaultCredentials = true
+                    };
+                    httpClientHandler.Proxy = webProxy;
+                    httpClientHandler.UseProxy = true;
+                    _logger.LogInformation("Using proxy {ProxyUrl} with default network credentials for SAS upload of {FileName} to container {ContainerName}", proxyUrl, file.FileName, extractedContainerName);
+                }
+
+
                 using (var fileStream = file.OpenReadStream())
+                using (var httpClient = new HttpClient(httpClientHandler)) // Pass the configured handler
                 {
                     // Azure Blob Storage requires this header for block blobs
                     httpClient.DefaultRequestHeaders.Add("x-ms-blob-type", "BlockBlob");

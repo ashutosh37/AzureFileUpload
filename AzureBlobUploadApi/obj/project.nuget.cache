@@ -1,11 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "ZDdpSsKXUc8WXcmROkSQsZeiGBW4t2yi7rsatDqGJArDe65WXRblW6HUctsoUSmpQqJocAq+ECMAscQAlVEb+A==",
+  "dgSpecHash": "TdYpWyxc6N+yJMiNK7yX4ZDQ4NXsoQQStb5Dj6DUl/70s6YvZAORnToc88a765Z3GMRMh4IbF8VUfdTlUfkWLw==",
   "success": true,
   "projectFilePath": "/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/AzureBlobUploadApi.csproj",
   "expectedPackageFiles": [
     "/Users/ashutoshnigam/.nuget/packages/azure.core/1.44.1/azure.core.1.44.1.nupkg.sha512",
     "/Users/ashutoshnigam/.nuget/packages/azure.identity/1.11.4/azure.identity.1.11.4.nupkg.sha512",
+    "/Users/ashutoshnigam/.nuget/packages/azure.search.documents/11.6.0/azure.search.documents.11.6.0.nupkg.sha512",
     "/Users/ashutoshnigam/.nuget/packages/azure.security.keyvault.certificates/4.6.0/azure.security.keyvault.certificates.4.6.0.nupkg.sha512",
     "/Users/ashutoshnigam/.nuget/packages/azure.security.keyvault.secrets/4.6.0/azure.security.keyvault.secrets.4.6.0.nupkg.sha512",
     "/Users/ashutoshnigam/.nuget/packages/azure.storage.blobs/12.24.0/azure.storage.blobs.12.24.0.nupkg.sha512",
@@ -68,6 +69,7 @@
     "/Users/ashutoshnigam/.nuget/packages/system.security.cryptography.xml/8.0.1/system.security.cryptography.xml.8.0.1.nupkg.sha512",
     "/Users/ashutoshnigam/.nuget/packages/system.text.encodings.web/6.0.0/system.text.encodings.web.6.0.0.nupkg.sha512",
     "/Users/ashutoshnigam/.nuget/packages/system.text.json/8.0.5/system.text.json.8.0.5.nupkg.sha512",
+    "/Users/ashutoshnigam/.nuget/packages/system.threading.channels/4.7.1/system.threading.channels.4.7.1.nupkg.sha512",
     "/Users/ashutoshnigam/.nuget/packages/system.threading.tasks.extensions/4.5.4/system.threading.tasks.extensions.4.5.4.nupkg.sha512"
   ],
   "logs": []

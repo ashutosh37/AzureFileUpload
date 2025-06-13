@@ -74,3 +74,4 @@
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/obj/Debug/net8.0/AzureBlobUploadApi.genruntimeconfig.cache
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/obj/Debug/net8.0/ref/AzureBlobUploadApi.dll
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/obj/Debug/net8.0/AzureBlobUploadApi.sourcelink.json
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/Azure.Search.Documents.dll

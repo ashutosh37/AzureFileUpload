@@ -59,6 +59,10 @@ builder.Services.AddSingleton<BlobStorageService>();
 builder.Services.Configure<List<StorageAccountDetail>>(
     builder.Configuration.GetSection("StorageAccountsForSasUpload"));
 
+// Configure and bind Azure Search settings
+builder.Services.Configure<AzureSearchConfig>(
+    builder.Configuration.GetSection("AzureSearch"));
+builder.Services.AddSingleton<AzureSearchService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
