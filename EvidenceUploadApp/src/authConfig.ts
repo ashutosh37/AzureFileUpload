@@ -3,7 +3,7 @@ import { type Configuration, LogLevel } from "@azure/msal-browser";
 // IMPORTANT: Replace these placeholders with your actual Azure AD App Registration details
 const FRONTEND_APP_CLIENT_ID = "YOUR_FRONTEND_APP_CLIENT_ID"; // Client ID of your Frontend App Registration
 const TENANT_ID = "YOUR_TENANT_ID"; // Your Azure AD Tenant ID
-const API_APP_CLIENT_ID_URI = "api://YOUR_API_APP_CLIENT_ID_OR_URI"; // Application ID URI of your Backend API App Registration
+// const API_APP_CLIENT_ID_URI = "api://YOUR_API_APP_CLIENT_ID_OR_URI"; // Application ID URI of your Backend API App Registration (if used)
 
 // Config object to be passed to Msal on creation
 export const msalConfig: Configuration = {
@@ -36,7 +36,7 @@ export const loginRequest = {
     scopes: ["User.Read"] // Basic scope to read user profile
 };
 
-// Add scopes here for access token to be used at your API endpoints.
-export const apiRequest = {
-    scopes: [`${API_APP_CLIENT_ID_URI}/Files.ReadWrite`] // Example: "api://<api_client_id>/Files.ReadWrite"
-};
+// Add scopes here for access token to be used at your API endpoints if/when your API requires authorization.
+// export const apiRequest = {
+//     scopes: [`${API_APP_CLIENT_ID_URI}/Files.ReadWrite`] // Example: "api://<api_client_id>/Files.ReadWrite"
+// };

@@ -1,6 +1,6 @@
-import { useState, type ChangeEvent, useEffect } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { useMsal } from "@azure/msal-react";
-import { apiRequest } from "./authConfig"; // Import API request config
+// import { apiRequest } from "./authConfig"; // API request config removed as backend doesn't require auth yet
 
 interface SasUploadInfo {
   blobUri: string;
@@ -9,8 +9,8 @@ interface SasUploadInfo {
 }
 
 function FileUploadForm() {
-  const { instance, accounts } = useMsal();
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const { accounts } = useMsal();
+  // const [accessToken, setAccessToken] = useState<string | null>(null); // Removed, as API-specific token not needed yet
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [containerName, setContainerName] = useState('');
   const [uploadStatus, setUploadStatus] = useState<string>('');
@@ -22,31 +22,13 @@ function FileUploadForm() {
   // Access the environment variable
   const backendApiBaseUrl = import.meta.env.VITE_BACKEND_API_BASE_URL || 'http://localhost:5230/api/files'; // Fallback for safety
 
-  useEffect(() => {
-    const request = {
-      ...apiRequest,
-      account: accounts[0] // Ensure we use the currently logged-in account
-    };
-
-    if (accounts.length > 0) {
-      instance.acquireTokenSilent(request).then((response) => {
-        setAccessToken(response.accessToken);
-      }).catch((error) => {
-        console.warn("Silent token acquisition failed, attempting popup:", error);
-        // Fallback to interactive token acquisition if silent fails
-        instance.acquireTokenPopup(request).then((response) => {
-          setAccessToken(response.accessToken);
-        }).catch(popupError => {
-          console.error("Popup token acquisition failed:", popupError);
-          setUploadError("Failed to acquire API token. Please try logging in again.");
-        });
-      });
-    }
-  }, [instance, accounts]);
+  // useEffect for acquiring API-specific token removed as backend doesn't require auth yet.
+  // If API auth is added later, this logic (using apiRequest) would be reinstated.
 
   const getAuthHeaders = (isFormData: boolean = false) => {
-    if (!accessToken) return {};
-    const headers: HeadersInit = { 'Authorization': `Bearer ${accessToken}` };
+    // Authorization header removed as backend doesn't require auth yet.
+    // if (!accessToken) return {}; // No longer checking for API-specific token
+    const headers: HeadersInit = {}; // { 'Authorization': `Bearer ${accessToken}` };
     if (!isFormData) {
       headers['Content-Type'] = 'application/json';
     }
@@ -73,8 +55,8 @@ function FileUploadForm() {
       setUploadError("Container name is required to fetch files.");
       return;
     }
-    if (!accessToken) {
-      setUploadError("Not authenticated. Please log in to fetch files.");
+    if (accounts.length === 0) {
+      setUploadError("Not logged in. Please log in to fetch files.");
       return;
     }
     setIsLoadingFiles(true);
@@ -107,8 +89,8 @@ function FileUploadForm() {
       setUploadError('Please enter a container name.');
       return;
     }
-    if (!accessToken) {
-      setUploadError("Not authenticated. Please log in to upload files.");
+    if (accounts.length === 0) {
+      setUploadError("Not logged in. Please log in to upload files.");
       return;
     }
 
@@ -180,7 +162,7 @@ function FileUploadForm() {
 
   return (
     <div className="w-full mx-auto p-8 bg-white rounded-xl shadow-2xl"> {/* Removed max-w-lg and mt-12 */}
-      {!accessToken && (
+      {accounts.length === 0 && (
         <div className="mb-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700">
           <p className="font-bold">Authentication Required</p>
           <p>Please ensure you are logged in and have an active session to use the upload features.</p>
@@ -199,13 +181,13 @@ function FileUploadForm() {
           onChange={handleContainerNameChange}
           className="shadow-sm appearance-none border border-gray-300 rounded-md w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder="e.g., matter1234"
-          disabled={!accessToken}
+          disabled={accounts.length === 0}
         />
         <button
           onClick={() => fetchFiles(containerName)}
-          disabled={isLoadingFiles || !containerName || !accessToken}
+          disabled={isLoadingFiles || !containerName || accounts.length === 0}
           className={`mt-3 w-full sm:w-auto bg-gray-700 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-150 ease-in-out ${
-            (isLoadingFiles || !containerName || !accessToken) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md'
+            (isLoadingFiles || !containerName || accounts.length === 0) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md'
           }`}
         >
           {isLoadingFiles && displayedContainerForFiles === containerName ? (
@@ -222,16 +204,16 @@ function FileUploadForm() {
         <label htmlFor="fileInput" className="block text-gray-700 text-sm font-bold mb-2">
           Select File:
         </label>
-        <label htmlFor="fileInput" className={`flex flex-col items-center justify-center w-full h-32 px-4 transition bg-white border-2 border-gray-300 border-dashed rounded-md appearance-none ${!accessToken ? 'cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-gray-400 focus:outline-none'}`}>
+        <label htmlFor="fileInput" className={`flex flex-col items-center justify-center w-full h-32 px-4 transition bg-white border-2 border-gray-300 border-dashed rounded-md appearance-none ${accounts.length === 0 ? 'cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-gray-400 focus:outline-none'}`}>
             <span className="flex items-center space-x-2">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
                 <span className="font-medium text-gray-600">
-                    {accessToken ? <>Drop files to Attach, or <span className="text-blue-600 underline">browse</span></> : "Login to enable file selection"}
+                    {accounts.length > 0 ? <>Drop files to Attach, or <span className="text-blue-600 underline">browse</span></> : "Login to enable file selection"}
                 </span>
             </span>
-            <input type="file" id="fileInput" onChange={handleFileChange} className="hidden" disabled={!accessToken} />
+            <input type="file" id="fileInput" onChange={handleFileChange} className="hidden" disabled={accounts.length === 0} />
         </label>
         {selectedFile && (
           <p className="mt-3 text-sm text-gray-700">Selected: <span className="font-semibold">{selectedFile.name}</span></p>
@@ -241,9 +223,9 @@ function FileUploadForm() {
       <div className="mt-8">
         <button
           onClick={handleUpload}
-          disabled={!selectedFile || !containerName || uploadStatus.startsWith('Uploading') || !accessToken}
+          disabled={!selectedFile || !containerName || uploadStatus.startsWith('Uploading') || accounts.length === 0}
           className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-150 ease-in-out ${
-            (!selectedFile || !containerName || uploadStatus.startsWith('Uploading') || !accessToken) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-lg'
+            (!selectedFile || !containerName || uploadStatus.startsWith('Uploading') || accounts.length === 0) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-lg'
           }`}
         >
           {uploadStatus.startsWith('Uploading') ? 'Uploading...' : 'Upload'}
