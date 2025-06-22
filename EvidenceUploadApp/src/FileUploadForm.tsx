@@ -37,6 +37,8 @@ function FileUploadForm() {
   const [rawBlobList, setRawBlobList] = useState<BackendFileInfo[]>([]); // Full flat list from backend for the current container
   const [displayedItems, setDisplayedItems] = useState<DisplayItem[]>([]); // Processed items for the current view
   const [currentPath, setCurrentPath] = useState<string>(''); // Current virtual path, e.g., "folderA/subfolderB/"
+  const [sortColumn, setSortColumn] = useState<string>('displayName'); // Default sort by displayName
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc'); // Default ascending
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [prevPageTokens, setPrevPageTokens] = useState<(string | null)[]>([]); // Stack of tokens for previous pages
 
@@ -153,11 +155,30 @@ function FileUploadForm() {
         }
       }
     });
-    setDisplayedItems(Array.from(itemsMap.values()).sort((a, b) => {
-      if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1; // Folders first
-      return a.displayName.localeCompare(b.displayName); // Then sort by name
-    }));
-  }, [rawBlobList, currentPath]);
+
+    const getSortValue = (item: DisplayItem, column: string): string => {
+        if (item.isFolder) return ''; // Folders don't have these values, sort them first anyway
+        if (column === 'DocumentId') {
+            // Metadata keys are often lowercased by Azure SDKs when retrieved, so check common cases.
+            return item.metadata?.documentid || item.metadata?.DocumentId || '';
+        }
+        const value = (item as any)[column];
+        return typeof value === 'string' ? value : '';
+    };
+
+    let sortedItems = Array.from(itemsMap.values()).sort((a, b) => {
+      if (a.isFolder !== b.isFolder) {
+        return a.isFolder ? -1 : 1;
+      }
+
+      const aValue = getSortValue(a, sortColumn);
+      const bValue = getSortValue(b, sortColumn);
+
+      return sortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+    });
+
+    setDisplayedItems(sortedItems);
+  }, [rawBlobList, currentPath, sortColumn, sortDirection]);
 
   // Keep the destination path input in sync with the user's navigation in the file grid
   useEffect(() => {
@@ -188,6 +209,8 @@ function FileUploadForm() {
       setDestinationPath(''); // Reset destination path on container change
       setLastClickedFileIndex(null); // Clear last clicked index on container change
       setSelectedFiles([]); // Clear selection when container changes
+      setSortColumn('displayName'); // Reset sort column
+      setSortDirection('asc'); // Reset sort direction
     }
 
     try {
@@ -419,6 +442,17 @@ function FileUploadForm() {
         console.error("Error deleting file:", error);
         setUploadError(error instanceof Error ? `Error deleting file: ${error.message}` : 'Could not delete file.');
         setUploadStatus('');
+    }
+  };
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // If same column is clicked, toggle direction
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      // If new column is clicked, set it and default to ascending
+      setSortColumn(column);
+      setSortDirection('asc');
     }
   };
 
@@ -884,19 +918,41 @@ function FileUploadForm() {
                 <p className="mb-2 text-sm text-gray-500">Items: {displayedItems.length}</p>
                 <table className="min-w-full divide-y divide-gray-200 shadow-sm rounded-md overflow-hidden">
                   <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <tr className="relative"> {/* Added relative for resize handles */}
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer relative"
+                          onClick={() => handleSort('displayName')} style={{ width: columnWidths.displayName }}>
                         Name
+                        {sortColumn === 'displayName' && (
+                          <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                        <div className="resize-handle" onMouseDown={(e) => startResize(e, 'displayName')}></div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer relative"
+                          onClick={() => handleSort('DocumentId')} style={{ width: columnWidths.DocumentId }}>
+                        Document ID
+                        {sortColumn === 'DocumentId' && (
+                          <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                        <div className="resize-handle" onMouseDown={(e) => startResize(e, 'DocumentId')}></div>
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer relative"
+                          onClick={() => handleSort('checksum')} style={{ width: columnWidths.checksum }}>
                         Checksum
+                        {sortColumn === 'checksum' && (
+                          <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                        <div className="resize-handle" onMouseDown={(e) => startResize(e, 'checksum')}></div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative"
+                          style={{ width: columnWidths.Actions }}>
                         Actions
+                        <div className="resize-handle" onMouseDown={(e) => startResize(e, 'Actions')}></div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative"
+                          style={{ width: columnWidths.checkbox }}>
                           <input type="checkbox" onChange={handleSelectAll} checked={selectedFiles.length === displayedItems.filter(item => !item.isFolder).length && displayedItems.filter(item => !item.isFolder).length > 0} />
-                      </th>                      
+                          <div className="resize-handle" onMouseDown={(e) => startResize(e, 'checkbox')}></div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -907,16 +963,23 @@ function FileUploadForm() {
                       onClick={() => setSelectedItem(item)}
                       onDoubleClick={() => handleItemAction(item)}
                     >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-left">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-left"
+                          style={{ width: columnWidths.displayName }}>
                         <span className="flex items-center">
                           {item.isFolder ? <FolderIcon /> : getFileIcon(item.displayName)}
                           {item.displayName}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left"
+                          style={{ width: columnWidths.DocumentId }}>
+                        {!item.isFolder ? (item.metadata?.documentid || item.metadata?.DocumentId || 'N/A') : ''}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left"
+                          style={{ width: columnWidths.checksum }}>
                         {item.checksum}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                          style={{ width: columnWidths.Actions }}>
                         {!item.isFolder && (
                           <button 
                             onClick={(e) => handleDeleteClick(item, e)} 
@@ -927,7 +990,8 @@ function FileUploadForm() {
                           </button>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                          style={{ width: columnWidths.checkbox }}>
                           {!item.isFolder && (
                               <input
                                   type="checkbox"
