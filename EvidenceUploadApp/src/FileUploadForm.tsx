@@ -918,68 +918,57 @@ function FileUploadForm() {
                 <p className="mb-2 text-sm text-gray-500">Items: {displayedItems.length}</p>
                 <table className="min-w-full divide-y divide-gray-200 shadow-sm rounded-md overflow-hidden">
                   <thead className="bg-gray-50">
-                    <tr className="relative"> {/* Added relative for resize handles */}
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer relative"
-                          onClick={() => handleSort('displayName')} style={{ width: columnWidths.displayName }}>
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          onClick={() => handleSort('displayName')}>
                         Name
                         {sortColumn === 'displayName' && (
                           <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                         )}
-                        <div className="resize-handle" onMouseDown={(e) => startResize(e, 'displayName')}></div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer relative"
-                          onClick={() => handleSort('DocumentId')} style={{ width: columnWidths.DocumentId }}>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          onClick={() => handleSort('DocumentId')}>
                         Document ID
                         {sortColumn === 'DocumentId' && (
                           <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                         )}
-                        <div className="resize-handle" onMouseDown={(e) => startResize(e, 'DocumentId')}></div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer relative"
-                          onClick={() => handleSort('checksum')} style={{ width: columnWidths.checksum }}>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          onClick={() => handleSort('checksum')}>
                         Checksum
                         {sortColumn === 'checksum' && (
                           <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                         )}
-                        <div className="resize-handle" onMouseDown={(e) => startResize(e, 'checksum')}></div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative"
-                          style={{ width: columnWidths.Actions }}>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
-                        <div className="resize-handle" onMouseDown={(e) => startResize(e, 'Actions')}></div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative"
-                          style={{ width: columnWidths.checkbox }}>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           <input type="checkbox" onChange={handleSelectAll} checked={selectedFiles.length === displayedItems.filter(item => !item.isFolder).length && displayedItems.filter(item => !item.isFolder).length > 0} />
-                          <div className="resize-handle" onMouseDown={(e) => startResize(e, 'checkbox')}></div>
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                  {displayedItems.map((item) => (
+                  {displayedItems.map((item, index) => (
                     <tr 
                       key={item.id} 
                       className={`hover:bg-gray-100 cursor-pointer ${selectedItem?.id === item.id ? 'bg-blue-100' : ''}`}
                       onClick={() => setSelectedItem(item)}
                       onDoubleClick={() => handleItemAction(item)}
                     >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-left"
-                          style={{ width: columnWidths.displayName }}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-left">
                         <span className="flex items-center">
                           {item.isFolder ? <FolderIcon /> : getFileIcon(item.displayName)}
                           {item.displayName}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left"
-                          style={{ width: columnWidths.DocumentId }}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
                         {!item.isFolder ? (item.metadata?.documentid || item.metadata?.DocumentId || 'N/A') : ''}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left"
-                          style={{ width: columnWidths.checksum }}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
                         {item.checksum}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-                          style={{ width: columnWidths.Actions }}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {!item.isFolder && (
                           <button 
                             onClick={(e) => handleDeleteClick(item, e)} 
@@ -990,13 +979,12 @@ function FileUploadForm() {
                           </button>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-                          style={{ width: columnWidths.checkbox }}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {!item.isFolder && (
                               <input
                                   type="checkbox"
                                   value={item.fullPath}
-                                  onChange={(e) => handleCheckboxChange(e, item, displayedItems.filter(di => !di.isFolder).indexOf(item))}
+                                  onChange={(e) => handleCheckboxChange(e, item, index)}
                                   checked={selectedFiles.includes(item.fullPath)} // Check if the item's fullPath is in selectedFiles
                               />
                           )}
