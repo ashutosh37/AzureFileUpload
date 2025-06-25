@@ -173,11 +173,16 @@ namespace MyBlobUploadApi.Services
                     var metadata = new Dictionary<string, string>();
                     if (blobItem.Metadata != null)
                     {
+                        // Normalize metadata keys to camelCase for consistent frontend consumption
                         foreach (var pair in blobItem.Metadata)
                         {
-                            metadata[pair.Key] = pair.Value;
+                            // Convert first character to lowercase, keep rest as is.
+                            // This handles "DocumentId" -> "documentId", "createdDate" -> "createdDate", etc.
+                            string normalizedKey = char.ToLowerInvariant(pair.Key[0]) + pair.Key.Substring(1);
+                            metadata[normalizedKey] = pair.Value;
                         }
                     }
+                    _logger.LogInformation("BlobService: Retrieved metadata for {BlobName}: {Metadata}", blobItem.Name, string.Join(", ", metadata.Select(p => $"{p.Key}={p.Value}")));
                     fileInfos.Add(new MyBlobUploadApi.Models.FileInfo { Name = blobItem.Name, Checksum = checksum, Metadata = metadata });
                 }
 
@@ -356,6 +361,44 @@ namespace MyBlobUploadApi.Services
             // Both are considered a "success" from the caller's perspective (the blob is gone).
             var response = await blobClient.DeleteIfExistsAsync();
             return response.Value; // Will be true if deleted, false if not found.
+        }
+
+        /// <summary>
+        /// Retrieves the metadata for a specific blob.
+        /// </summary>
+        /// <param name="targetContainerName">The name of the container.</param>
+        /// <param name="blobName">The name of the blob.</param>
+        /// <returns>A dictionary of metadata, or null if the blob does not exist.</returns>
+        public async Task<IDictionary<string, string>?> GetBlobMetadataAsync(string targetContainerName, string blobName)
+        {
+            if (string.IsNullOrWhiteSpace(targetContainerName) || string.IsNullOrWhiteSpace(blobName))
+            {
+                throw new ArgumentException("Container and blob names cannot be empty.");
+            }
+
+            var accountDetail = _storageAccounts.FirstOrDefault();
+            if (accountDetail == null || string.IsNullOrWhiteSpace(accountDetail.AccountName) || string.IsNullOrWhiteSpace(accountDetail.AccountKey))
+            {
+                _logger.LogError("No valid storage account configuration found for getting blob metadata.");
+                throw new InvalidOperationException("Storage account for metadata retrieval is not configured properly.");
+            }
+
+            var blobServiceClient = new BlobServiceClient($"DefaultEndpointsProtocol=https;AccountName={accountDetail.AccountName};AccountKey={accountDetail.AccountKey};EndpointSuffix=core.windows.net");
+            var containerClient = blobServiceClient.GetBlobContainerClient(targetContainerName);
+            var blobClient = containerClient.GetBlobClient(blobName);
+
+            if (await blobClient.ExistsAsync())
+            {
+                BlobProperties properties = await blobClient.GetPropertiesAsync();
+                var metadata = new Dictionary<string, string>();
+                foreach (var pair in properties.Metadata)
+                {
+                    string normalizedKey = char.ToLowerInvariant(pair.Key[0]) + pair.Key.Substring(1);
+                    metadata[normalizedKey] = pair.Value;
+                }
+                return metadata;
+            }
+            return null;
         }
     }
 }

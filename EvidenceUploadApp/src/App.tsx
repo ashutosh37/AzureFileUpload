@@ -1,6 +1,6 @@
 import './App.css'
 import FileUploadForm from './FileUploadForm';
-import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from "@azure/msal-react";
+import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal, MsalAuthenticationTemplate } from "@azure/msal-react";
 import { loginRequest } from "./authConfig";
 
 function App() {
@@ -47,9 +47,29 @@ function App() {
         </div>
       </header>
 
+      {/* Use react-router-dom for routing */}
+      <Routes>
+        {/* Default route for the main application */}
+        <Route path="/" element={
+          <main className="flex-grow w-full py-8 px-4 sm:px-6 lg:px-8">
+            <AuthenticatedTemplate>
+              <FileUploadForm />
+            </AuthenticatedTemplate>
+            <UnauthenticatedTemplate>
+              <div className="text-center p-10 bg-white rounded-xl shadow-md">
+                <h2 className="text-2xl font-semibold mb-4 text-gray-700">Please log in to access the portal.</h2>
+                <p className="text-gray-600">Use the login button in the header to continue.</p>
+              </div>
+            </UnauthenticatedTemplate>
+          </main>
+        } />
+
+        {/* New route for direct folder access */}
+        <Route path="/matter/:matterId/*" element={<MatterFolderRoute />} />
+      </Routes>
+
       <main className="flex-grow w-full py-8 px-4 sm:px-6 lg:px-8"> {/* Removed max-w-4xl and mx-auto */}
         <AuthenticatedTemplate>
-          <FileUploadForm />
         </AuthenticatedTemplate>
         <UnauthenticatedTemplate>
           <div className="text-center p-10 bg-white rounded-xl shadow-md">
@@ -65,5 +85,25 @@ function App() {
     </div>
   );
 }
+
+// Component to extract URL parameters and pass them to FileUploadForm
+import { Routes, Route, useParams } from 'react-router-dom';
+import { InteractionType } from '@azure/msal-browser'; // Import InteractionType from msal-browser
+
+const MatterFolderRoute = () => {
+  const { matterId, '*': folderPath } = useParams(); // '*' captures all segments after :matterId
+  // Ensure folderPath ends with a slash if it's not empty
+  const formattedFolderPath = folderPath ? (folderPath.endsWith('/') ? folderPath : folderPath + '/') : '';
+
+  return (
+    <main className="flex-grow w-full py-8 px-4 sm:px-6 lg:px-8">
+      {/* MsalAuthenticationTemplate ensures user is authenticated before rendering FileUploadForm. */}
+      {/* Use InteractionType.Popup from msal-react for correct type assignment. */}
+      <MsalAuthenticationTemplate interactionType={InteractionType.Popup} authenticationRequest={loginRequest}>
+        <FileUploadForm initialContainerName={matterId} initialFolderPath={formattedFolderPath} />
+      </MsalAuthenticationTemplate>
+    </main>
+  );
+};
 
 export default App;

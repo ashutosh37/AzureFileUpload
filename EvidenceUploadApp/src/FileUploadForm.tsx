@@ -1,7 +1,8 @@
-import { useState, type ChangeEvent, type DragEvent, useEffect } from 'react';
+import { useState, type ChangeEvent, type DragEvent, useEffect, useRef } from 'react';
 import { useMsal } from "@azure/msal-react";
+import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { FolderIcon, FileIcon, WordIcon, ExcelIcon, PdfIcon, ImageIcon, EmailIcon, DeleteIcon } from './icons'; // Import all icons
-// import { apiRequest } from "./authConfig"; // API request config removed as backend doesn't require auth yet
+import { apiRequest } from "./authConfig";
 
 interface SasUploadInfo {
   blobUri: string;
@@ -26,12 +27,28 @@ interface DisplayItem {
   metadata?: Record<string, string>;
 }
 
-function FileUploadForm() {
-  const { accounts } = useMsal();
-  const [filesToUpload, setFilesToUpload] = useState<File[]>([]);
+// New state to manage files with their current processing status
+interface FileToProcess {
+  file: File;
+  overwrite: boolean; // Flag to indicate if this file should overwrite existing
+  status: 'pending' | 'uploading' | 'success' | 'error' | 'conflict' | 'skipped';
+  errorMessage?: string;
+}
+
+// Add props interface for initial values from URL
+interface FileUploadFormProps {
+  initialContainerName?: string;
+  initialFolderPath?: string;
+}
+
+function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadFormProps) {
+  const { instance, accounts } = useMsal();
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [containerNameInput, setContainerNameInput] = useState(''); // Renamed to avoid confusion
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [uploadError, setUploadError] = useState<string>('');
+  const [filesToProcess, setFilesToProcess] = useState<FileToProcess[]>([]); // New state for managing upload queue
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for the file input element
   
   // State for file listing and navigation
   const [rawBlobList, setRawBlobList] = useState<BackendFileInfo[]>([]); // Full flat list from backend for the current container
@@ -58,13 +75,50 @@ function FileUploadForm() {
   // Access the environment variable
   const backendApiBaseUrl = import.meta.env.VITE_BACKEND_API_BASE_URL || 'http://localhost:5230/api/files'; // Fallback for safety
 
-  // useEffect for acquiring API-specific token removed as backend doesn't require auth yet.
-  // If API auth is added later, this logic (using apiRequest) would be reinstated.
+  // useEffect for acquiring an access token for the backend API
+  useEffect(() => {
+    if (accounts.length > 0) {
+      const request = {
+        ...apiRequest,
+        account: accounts[0]
+      };
+
+      instance.acquireTokenSilent(request).then(response => {
+        setAccessToken(response.accessToken);
+        console.log('Access Token (silent):', response.accessToken); // For debugging
+      }).catch(error => {
+        // Fallback to interactive request if silent fails
+        if (error instanceof InteractionRequiredAuthError) {
+            instance.acquireTokenPopup(request).then(response => {
+                setAccessToken(response.accessToken);
+                console.log('Access Token (popup):', response.accessToken); // For debugging
+            }).catch(e => {
+                console.error("Interactive token acquisition failed: ", e);
+            });
+        }
+        console.error("Silent token acquisition failed: ", error);
+      });
+    }
+  }, [accounts, instance]);
+
+  // Effect to set initial container and folder from props
+  useEffect(() => {
+    if (initialContainerName) {
+      setContainerNameInput(initialContainerName);
+      // Only fetch files if the access token is also available to prevent race conditions on initial load.
+      if (accessToken) {
+        fetchAndSetRawFiles(initialContainerName);
+      }
+    }
+    if (initialFolderPath) {
+      setCurrentPath(initialFolderPath);
+      setDestinationPath(initialFolderPath);
+    }
+  }, [initialContainerName, initialFolderPath, accessToken]); // Add accessToken to dependency array
 
   const getAuthHeaders = (isFormData: boolean = false) => {
-    // Authorization header removed as backend doesn't require auth yet.
-    // if (!accessToken) return {}; // No longer checking for API-specific token
-    const headers: HeadersInit = {}; // { 'Authorization': `Bearer ${accessToken}` };
+    if (!accessToken) return {};
+    const headers: HeadersInit = { 'Authorization': `Bearer ${accessToken}` };
     if (!isFormData) {
       headers['Content-Type'] = 'application/json';
     }
@@ -74,16 +128,13 @@ function FileUploadForm() {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
-      setUploadStatus('');
-      setFilesToUpload(Array.from(files));
+      setFilesToProcess(Array.from(files).map(f => ({ file: f, overwrite: false, status: 'pending' })));
       setUploadError('');
     }
   };
 
   const handleContainerNameChange = (event: ChangeEvent<HTMLInputElement>) => {
     setContainerNameInput(event.target.value);
-    setUploadStatus('');
-    setUploadError('');
     // When container name input changes, we don't immediately clear/fetch. Fetching is tied to the button.
     // setFilesInContainer([]); 
     // setDisplayedContainerForFiles('');
@@ -108,8 +159,7 @@ function FileUploadForm() {
 
     const files = event.dataTransfer.files;
     if (files && files.length > 0) {
-      setUploadStatus('');
-      setFilesToUpload(Array.from(files));
+      setFilesToProcess(Array.from(files).map(f => ({ file: f, overwrite: false, status: 'pending' })));
       setUploadError('');
     }
   };
@@ -156,14 +206,23 @@ function FileUploadForm() {
       }
     });
 
-    const getSortValue = (item: DisplayItem, column: string): string => {
-        if (item.isFolder) return ''; // Folders don't have these values, sort them first anyway
-        if (column === 'DocumentId') {
-            // Metadata keys are often lowercased by Azure SDKs when retrieved, so check common cases.
-            return item.metadata?.documentid || item.metadata?.DocumentId || '';
+    const getSortValue = (item: DisplayItem, column: string): any => {
+        if (item.isFolder && column !== 'displayName') return '';
+
+        switch (column) {
+            case 'displayName':
+                return item.displayName;
+            case 'checksum':
+                return item.checksum;
+            case 'documentId':
+            case 'createdDate':
+            case 'modifiedDate':
+            case 'createdBy':
+            case 'modifiedBy':
+                return item.metadata?.[column] || '';
+            default:
+                return '';
         }
-        const value = (item as any)[column];
-        return typeof value === 'string' ? value : '';
     };
 
     let sortedItems = Array.from(itemsMap.values()).sort((a, b) => {
@@ -191,9 +250,14 @@ function FileUploadForm() {
       setUploadError("Container name is required to fetch files.");
       return;
     }
-    // Auth check should ideally be done before calling this, or use isEffectivelyAuthenticated
     if (accounts.length === 0) { 
       setUploadError("Not logged in. Please log in to fetch files.");
+      return;
+    }
+    // Add a guard to ensure the access token is available before making the API call.
+    if (!accessToken) {
+      setUploadError("Authentication token is not yet available. Please wait a moment and try again.");
+      console.warn("fetchAndSetRawFiles called before accessToken was ready.");
       return;
     }
     setIsLoadingFiles(true);
@@ -217,6 +281,12 @@ function FileUploadForm() {
       const response = await fetch(`${backendApiBaseUrl}/list?targetContainerName=${encodeURIComponent(containerToFetch)}`, { // This is the initial fetch
         headers: getAuthHeaders()
       });
+
+      if (response.status === 403) {
+        const errorBody = await response.json();
+        throw new Error(errorBody.Message || "You do not have access to view these files.");
+      }
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to list files for '${containerToFetch}': ${response.status} - ${errorText || response.statusText}`);
@@ -253,6 +323,12 @@ function FileUploadForm() {
       const response = await fetch(url, {
         headers: getAuthHeaders()
       });
+
+      if (response.status === 403) {
+        const errorBody = await response.json();
+        throw new Error(errorBody.Message || "You do not have access to view these files.");
+      }
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to list files: ${response.status} - ${errorText || response.statusText}`);
@@ -289,8 +365,8 @@ function FileUploadForm() {
 
 
   const handleUpload = async () => {
-    if (filesToUpload.length === 0) {
-      setUploadError('Please select one or more files to upload.');
+    if (filesToProcess.length === 0) { // Check filesToProcess instead of filesToUpload
+      setUploadError('Please select one or more files to upload or clear existing files.');
       return;
     }
     if (!containerNameInput) {
@@ -299,6 +375,12 @@ function FileUploadForm() {
     }
     if (accounts.length === 0) {
       setUploadError("Not logged in. Please log in to upload files.");
+      return;
+    }
+    // Add a guard to ensure the access token is available before making the API call.
+    if (!accessToken) {
+      setUploadError("Authentication token is not yet available. Please wait a moment and try again.");
+      console.warn("handleUpload called before accessToken was ready.");
       return;
     }
 
@@ -311,7 +393,11 @@ function FileUploadForm() {
       const generateResponse = await fetch(generateUrl, {
         method: 'POST',
         headers: getAuthHeaders()
-      });
+      });      
+      if (generateResponse.status === 403) {
+        const errorBody = await generateResponse.json();
+        throw new Error(errorBody.Message || "You do not have access to perform this action.");
+      }
 
       if (!generateResponse.ok) {
         const errorDetails = await generateResponse.text();
@@ -326,42 +412,100 @@ function FileUploadForm() {
 
       // We'll use the first URL provided by the backend
       const containerSasDetails = sasInfoArray[0];
-      
-      const totalFiles = filesToUpload.length;
-      for (let i = 0; i < totalFiles; i++) {
-        const fileToUpload = filesToUpload[i];
-        const progress = `(${i + 1}/${totalFiles})`;
 
-        // Determine the blob name for upload
-        const finalPath = destinationPath.trim() === '' ? '' : (destinationPath.trim().endsWith('/') ? destinationPath.trim() : destinationPath.trim() + '/');
-        const blobNameForUpload = finalPath + fileToUpload.name;
+    const uploadFileToBackend = async (
+      fileToProcess: FileToProcess,
+      containerSasDetails: SasUploadInfo,
+      index: number, // For updating state correctly
+      totalFiles: number
+    ): Promise<{ status: 'success' | 'conflict' | 'error', message?: string }> => {
+      const file = fileToProcess.file;
+      const progress = `(${index + 1}/${totalFiles})`;
+      const finalPath = destinationPath.trim() === '' ? '' : (destinationPath.trim().endsWith('/') ? destinationPath.trim() : destinationPath.trim() + '/');
+      const blobNameForUpload = finalPath + file.name;
 
-        setUploadStatus(`Uploading ${progress}: "${blobNameForUpload}"...`);
+      setUploadStatus(`Uploading ${progress}: "${blobNameForUpload}"...`);
+      setFilesToProcess(prev => prev.map((f, idx) => idx === index ? { ...f, status: 'uploading' } : f));
 
-        // Step 2: Call the backend's /upload-via-sas endpoint for each file
-        const formData = new FormData();
-        formData.append('containerSasUrl', containerSasDetails.fullUploadUrl);
-        formData.append('file', fileToUpload, blobNameForUpload); 
-
-        const uploadViaSasUrl = `${backendApiBaseUrl}/upload-via-sas`;
-        const uploadResponse = await fetch(uploadViaSasUrl, {
-          method: 'POST',
-          body: formData,
-          headers: getAuthHeaders(true)
-        });
-
-        if (!uploadResponse.ok) {
-           if (uploadResponse.status === 409) {
-              const errorBody = await uploadResponse.json();
-              throw new Error(errorBody.message || `File "${fileToUpload.name}" already exists. Upload stopped.`);
-           }
-           const errorDetails = await uploadResponse.text();
-           throw new Error(`Upload failed for "${fileToUpload.name}": ${uploadResponse.status} ${uploadResponse.statusText} - ${errorDetails}. Upload stopped.`);
-         }
+      const formData = new FormData();
+      formData.append('containerSasUrl', containerSasDetails.fullUploadUrl);
+      formData.append('file', file, blobNameForUpload);
+      console.log(`Frontend: File "${file.name}" lastModified (raw): ${file.lastModified}`);
+      // Add the file's last modified date as an ISO string for the backend to use.
+      formData.append('fileLastModified', new Date(file.lastModified).toISOString());
+      if (fileToProcess.overwrite) {
+        formData.append('overwrite', 'true'); // Send overwrite flag to backend
       }
 
-      setUploadStatus(`${totalFiles} file(s) uploaded successfully!`);
-      setFilesToUpload([]); // Clear selected files after successful upload
+      const uploadViaSasUrl = `${backendApiBaseUrl}/upload-via-sas`;
+      const uploadResponse = await fetch(uploadViaSasUrl, {
+        method: 'POST',
+        body: formData,
+        headers: getAuthHeaders(true)
+      });
+
+      if (!uploadResponse.ok) {
+        const errorBody = await uploadResponse.json();
+        if (uploadResponse.status === 409 && errorBody.overwriteOption) { // Changed to camelCase
+          setFilesToProcess(prev => prev.map((f, idx) => idx === index ? { ...f, status: 'conflict', errorMessage: errorBody.message } : f));
+          return { status: 'conflict', message: errorBody.message }; // Changed to errorBody.message (lowercase 'm')
+        }
+        const errorMessage = errorBody.message || `Upload failed for "${file.name}": ${uploadResponse.status} ${uploadResponse.statusText} - ${errorBody.Details || uploadResponse.statusText}. Upload stopped.`; // Changed to errorBody.message (lowercase 'm')
+        setFilesToProcess(prev => prev.map((f, idx) => idx === index ? { ...f, status: 'error', errorMessage: errorMessage } : f));
+        return { status: 'error', message: errorMessage };
+      }
+
+      setFilesToProcess(prev => prev.map((f, idx) => idx === index ? { ...f, status: 'success' } : f));
+      return { status: 'success' };
+    };
+
+    let successfulUploadsCount = 0;
+    let skippedUploadsCount = 0;
+    let failedUploadsCount = 0;
+
+    for (let i = 0; i < filesToProcess.length; i++) {
+      let currentFileToProcess = filesToProcess[i];
+      let uploadAttempted = false;
+
+      while (!uploadAttempted) { // Loop for retries on conflict
+        const uploadResult = await uploadFileToBackend(currentFileToProcess, containerSasDetails, i, filesToProcess.length);
+
+        if (uploadResult.status === 'success') {
+          successfulUploadsCount++;
+          uploadAttempted = true;
+        } else if (uploadResult.status === 'conflict') {
+          const confirmOverwrite = window.confirm(`${uploadResult.message}\nDo you want to overwrite it?`);
+          if (confirmOverwrite) {
+            setFilesToProcess(prev => prev.map((f, idx) => idx === i ? { ...f, overwrite: true, status: 'pending' } : f));
+            currentFileToProcess = { ...currentFileToProcess, overwrite: true, status: 'pending' }; // Update local variable for next loop iteration
+          } else {
+            skippedUploadsCount++;
+            uploadAttempted = true;
+            setFilesToProcess(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'skipped' } : f));
+          }
+        } else { // status === 'error'
+          failedUploadsCount++;
+          uploadAttempted = true;
+        }
+      }
+    }
+
+    let finalMessage = '';
+    if (successfulUploadsCount > 0) {
+      finalMessage += `${successfulUploadsCount} file(s) uploaded successfully.`;
+    }
+    if (skippedUploadsCount > 0) {
+      finalMessage += ` ${skippedUploadsCount} file(s) skipped.`;
+    }
+    if (failedUploadsCount > 0) {
+      finalMessage += ` ${failedUploadsCount} file(s) failed to upload.`;
+      setUploadError(`Upload errors: ${filesToProcess.filter(f => f.status === 'error').map(f => `${f.file.name}: ${f.errorMessage}`).join('; ')}`);
+    }
+    setUploadStatus(finalMessage); // Clear selected files after successful upload
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      setFilesToProcess([]); // Clear processing list
       fetchAndSetRawFiles(containerNameInput); // Refresh file list for the current container
     } catch (error) {
       console.error('Upload error:', error);
@@ -387,6 +531,12 @@ function FileUploadForm() {
       // Fetch a read SAS URL for the blob and open it
       if (!displayedContainerForFiles) {
         setUploadError("Container context is missing. Cannot open file.");
+        return;
+      }
+      // Add a guard to ensure the access token is available before making the API call.
+      if (!accessToken) {
+        setUploadError("Authentication token is not yet available. Please wait a moment and try again.");
+        console.warn("handleItemAction called before accessToken was ready.");
         return;
       }
       try {
@@ -420,6 +570,12 @@ function FileUploadForm() {
     if (!displayedContainerForFiles) {
         setUploadError("Container context is missing. Cannot delete file.");
         return;
+    }
+    // Add a guard to ensure the access token is available before making the API call.
+    if (!accessToken) {
+      setUploadError("Authentication token is not yet available. Please wait a moment and try again.");
+      console.warn("handleDeleteClick called before accessToken was ready.");
+      return;
     }
 
     try {
@@ -463,6 +619,20 @@ function FileUploadForm() {
     setCurrentPath(pathSegments.length > 0 ? pathSegments.join('/') + '/' : '');
     setSelectedItem(null);
   }
+
+  const handleBreadcrumbClick = (pathSegment: string) => {
+    setCurrentPath(pathSegment);
+    setSelectedItem(null); // Clear selection when navigating
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleString();
+    } catch (e) {
+      return dateString; // Return original string if parsing fails
+    }
+  };
 
   const getFileIcon = (fileName: string) => {
     const extension = fileName.split('.').pop()?.toLowerCase();
@@ -556,6 +726,12 @@ function FileUploadForm() {
       setUploadError("Container context is missing. Cannot delete files.");
       return;
     }
+    // Add a guard to ensure the access token is available before making the API call.
+    if (!accessToken) {
+      setUploadError("Authentication token is not yet available. Please wait a moment and try again.");
+      console.warn("handleBulkDelete called before accessToken was ready.");
+      return;
+    }
 
     try {
       setUploadStatus(`Deleting ${selectedFiles.length} files...`);
@@ -604,11 +780,19 @@ function FileUploadForm() {
       );
     }
 
-    const [newMetadataKey, setNewMetadataKey] = useState<string>('');
-    const [newMetadataValue, setNewMetadataValue] = useState<string>('');
+    const auditKeys = ['createdDate', 'createdBy', 'modifiedDate', 'modifiedBy'];
+    const [newMetadataKey, setNewMetadataKey] = useState('');
+    const [newMetadataValue, setNewMetadataValue] = useState('');
     const [editMetadata, setEditMetadata] = useState<Record<string, string>>(() => item.metadata || {});
     const [isSavingMetadata, setIsSavingMetadata] = useState<boolean>(false);
     const [metadataError, setMetadataError] = useState<string>('');
+
+    const auditMetadata = Object.fromEntries(
+      Object.entries(editMetadata).filter(([key]) => auditKeys.includes(key))
+    );
+    const customMetadata = Object.fromEntries(
+      Object.entries(editMetadata).filter(([key]) => !auditKeys.includes(key))
+    );
 
     // Reset editMetadata when item changes
     useEffect(() => {
@@ -628,7 +812,7 @@ function FileUploadForm() {
         setMetadataError(`Metadata key "${newMetadataKey.trim()}" already exists. Please use a different key or edit the existing one.`);
         return;
       }
-      setEditMetadata(prev => ({ ...prev, [newMetadataKey.trim()]: newMetadataValue.trim() }));
+      setEditMetadata(prev => ({ ...prev, [newMetadataKey.trim().toLowerCase()]: newMetadataValue.trim() })); // Standardize to lowercase
       setNewMetadataKey('');
       setNewMetadataValue('');
     };
@@ -637,6 +821,13 @@ function FileUploadForm() {
       if (item.isFolder) return; // Cannot add metadata to folders
       setIsSavingMetadata(true);
       setMetadataError('');
+      // Add a guard to ensure the access token is available before making the API call.
+      if (!accessToken) {
+        setMetadataError("Authentication token is not yet available. Please wait a moment and try again.");
+        setIsSavingMetadata(false); // Reset saving state
+        console.warn("handleSaveMetadata called before accessToken was ready.");
+        return;
+      }
       try {
         const response = await fetch(`${backendApiBaseUrl}/${encodeURIComponent(containerName)}/${encodeURIComponent(item.fullPath)}/metadata`, {
           method: 'PUT',
@@ -671,20 +862,30 @@ function FileUploadForm() {
         <div className="space-y-3 text-sm text-left">
           <div>
             <label className="font-bold text-gray-600">Name:</label> {/* This is for the main item name, not metadata */}
-            <p className="text-gray-800 break-words">{item.displayName}</p> {/* This is for the main item name, not metadata */}
+            <p className="text-gray-800 break-words">{item.displayName}</p>
           </div>
           {!item.isFolder && ( // Only show metadata for files
-            <div className="mt-4 pt-4 border-t border-gray-200"> {/* Container for custom metadata section */}
-              {Object.keys(editMetadata).length === 0 && <p className="text-gray-500 text-sm">No custom metadata.</p>}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              {/* Audit Metadata (Read-only) */}
+              <div className="space-y-2 mb-4">
+                {auditKeys.map(key => auditMetadata[key] && (
+                  <div key={key}>
+                    <label className="font-bold text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1')}:</label>
+                    <p className="text-gray-800 break-words">{key.toLowerCase().includes('date') ? formatDate(auditMetadata[key]) : auditMetadata[key]}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Custom Metadata (Editable) */}
+              <h4 className="font-semibold text-gray-700 mb-2 border-t pt-4">Custom Properties</h4>
+              {Object.keys(customMetadata).length === 0 && <p className="text-gray-500 text-sm">No custom properties.</p>}
               <div className="space-y-2">
-                {Object.entries(editMetadata).map(([key, value]) => (
+                {Object.entries(customMetadata).map(([key, value]) => (
                   <div className="font-bold text-gray-600 break-all ">{key}:
-                  <div key={key} className="rounded-md flex flex-wrap "> {/* Added flex-wrap */}
-                    <div className="flex-grow min-w-0"> {/* Added flex-grow min-w-0 to allow text to wrap */}
-                      
+                  <div key={key} className="rounded-md flex flex-wrap ">
+                    <div className="flex-grow min-w-0">
                       <p className="font-normal text-gray-800 break-words">{value}</p>
                     </div>
-                    {/* Optional: Add a delete button for individual metadata entries */}
                   </div>
                   </div>
                 ))}
@@ -782,13 +983,13 @@ function FileUploadForm() {
                 onChange={handleContainerNameChange}
                 className="shadow-sm appearance-none border border-gray-300 rounded-md w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="e.g., matter1234"
-                disabled={accounts.length === 0}
+                disabled={accounts.length === 0 || !!initialContainerName} // Disable if initialContainerName is provided
               />
               <button
                 onClick={() => fetchAndSetRawFiles(containerNameInput)}
-                disabled={isLoadingFiles || !containerNameInput || accounts.length === 0}
+                disabled={isLoadingFiles || !containerNameInput || accounts.length === 0 || !accessToken || !!initialContainerName}
                 className={`mt-3 w-full sm:w-auto bg-gray-700 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-150 ease-in-out ${
-                  (isLoadingFiles || !containerNameInput || accounts.length === 0) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md'
+                  (isLoadingFiles || !containerNameInput || accounts.length === 0 || !accessToken || !!initialContainerName) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md'
                 }`}
               >
                 {isLoadingFiles && displayedContainerForFiles === containerNameInput ? (
@@ -822,13 +1023,17 @@ function FileUploadForm() {
                           {accounts.length > 0 ? <>Drop files to Attach, or <span className="text-blue-600 underline">browse</span></> : "Login to enable file selection"}
                       </span>
                   </span>
-                  <input type="file" id="fileInput" multiple onChange={handleFileChange} className="hidden" disabled={accounts.length === 0} />
+                  <input type="file" id="fileInput" multiple onChange={handleFileChange} className="hidden" disabled={accounts.length === 0} ref={fileInputRef} />
               </label>
-              {filesToUpload.length > 0 && (
+              {filesToProcess.length > 0 && (
                 <div className="mt-3 text-sm text-gray-700">
-                  <p className="font-semibold mb-1">Selected files ({filesToUpload.length}):</p>
+                  <p className="font-semibold mb-1">Files to upload ({filesToProcess.length}):</p>
                   <ul className="list-disc list-inside max-h-24 overflow-y-auto bg-gray-50 p-2 rounded-md text-left">
-                    {filesToUpload.map(file => (<li key={file.name} className="truncate">{file.name}</li>))}
+                    {filesToProcess.map((f, index) => (
+                      <li key={f.file.name + index} className={`truncate ${f.status === 'success' ? 'text-green-600' : f.status === 'error' ? 'text-red-600' : f.status === 'skipped' ? 'text-yellow-600' : f.status === 'conflict' ? 'text-orange-600' : ''}`}>
+                        {f.file.name} {f.status !== 'pending' && `(${f.status}${f.errorMessage ? `: ${f.errorMessage}` : ''})`}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               )}
@@ -845,16 +1050,16 @@ function FileUploadForm() {
                 onChange={(e) => setDestinationPath(e.target.value)}
                 className="shadow-sm appearance-none border border-gray-300 rounded-md w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="e.g., folderA/subfolderB"
-                disabled={accounts.length === 0}
+                disabled={accounts.length === 0 || !!initialFolderPath} // Disable if initialFolderPath is provided
               />
             </div>
 
             <div className="mt-8">
               <button
                 onClick={handleUpload}
-                disabled={filesToUpload.length === 0 || !containerNameInput || uploadStatus.startsWith('Uploading') || accounts.length === 0}
+                disabled={filesToProcess.length === 0 || !containerNameInput || uploadStatus.startsWith('Uploading') || accounts.length === 0 || !accessToken}
                 className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-150 ease-in-out ${
-                  (filesToUpload.length === 0 || !containerNameInput || uploadStatus.startsWith('Uploading') || accounts.length === 0) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-lg'
+                  (filesToProcess.length === 0 || !containerNameInput || uploadStatus.startsWith('Uploading') || accounts.length === 0 || !accessToken) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-lg'
                 }`}
               >
                 {uploadStatus.startsWith('Uploading') ? 'Uploading...' : 'Upload'}
@@ -874,13 +1079,43 @@ function FileUploadForm() {
       {/* Right Panel: File List */}
       <div className="flex gap-6">
         <div className="flex-grow bg-white p-8 rounded-xl shadow-2xl flex flex-col min-w-0"> {/* Takes remaining width */}
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold text-gray-700 truncate">
-              {displayedContainerForFiles 
-                ? `Container: '${displayedContainerForFiles}' ${currentPath ? `> ${currentPath}` : ''}` 
-                : "Files in Container"}
+          <div className="flex justify-between items-center mb-4 min-h-[32px]"> {/* Added min-h to prevent layout shift */}
+            <h3 className="text-xl font-semibold text-gray-700 flex-grow truncate">
+              {displayedContainerForFiles ? (
+                <>
+                  {initialContainerName ? (
+                    <span className="text-gray-700">Container: '{displayedContainerForFiles}'</span>
+                  ) : (
+                    <span
+                      className="text-blue-600 hover:underline cursor-pointer"
+                      onClick={() => handleBreadcrumbClick('')} // Go to root of container
+                    >
+                      Container: '{displayedContainerForFiles}'
+                    </span>
+                  )}
+                  {currentPath && (
+                    <>
+                      {currentPath.split('/').filter(s => s !== '').map((segment, index, array) => {
+                        const pathSoFar = array.slice(0, index + 1).join('/') + '/';
+                        const isLastSegment = index === array.length - 1;
+                        return (
+                          <span key={pathSoFar}>
+                            {' > '}
+                            {isLastSegment ? <span className="text-gray-700">{segment}</span> : (
+                              <span className="text-blue-600 hover:underline cursor-pointer" onClick={() => handleBreadcrumbClick(pathSoFar)}>{segment}</span>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </>
+                  )}
+                </>
+              ) : (
+                "Files in Container"
+              )}
             </h3>
-            {currentPath && (
+            {/* Hide "Up" button if at the root of the initial folder path */}
+            {currentPath && (!initialFolderPath || currentPath !== initialFolderPath) && (
               <button 
                 onClick={handleGoUp}
                 className="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-1 px-3 rounded-md flex-shrink-0"
@@ -927,9 +1162,30 @@ function FileUploadForm() {
                         )}
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                          onClick={() => handleSort('DocumentId')}>
+                          onClick={() => handleSort('documentId')}>
                         Document ID
-                        {sortColumn === 'DocumentId' && (
+                        {sortColumn === 'documentId' && (
+                          <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          onClick={() => handleSort('createdDate')}>
+                        Created Date
+                        {sortColumn === 'createdDate' && (
+                          <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          onClick={() => handleSort('modifiedDate')}>
+                        Modified Date
+                        {sortColumn === 'modifiedDate' && (
+                          <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          onClick={() => handleSort('modifiedBy')}>
+                        Modified By
+                        {sortColumn === 'modifiedBy' && (
                           <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                         )}
                       </th>
@@ -963,7 +1219,16 @@ function FileUploadForm() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
-                        {!item.isFolder ? (item.metadata?.documentid || item.metadata?.DocumentId || 'N/A') : ''}
+                        {!item.isFolder ? (item.metadata?.documentId || 'N/A') : ''}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
+                        {!item.isFolder ? formatDate(item.metadata?.createdDate) : ''}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
+                        {!item.isFolder ? formatDate(item.metadata?.modifiedDate) : ''}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
+                        {!item.isFolder ? (item.metadata?.modifiedBy || 'N/A') : ''}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
                         {item.checksum}
