@@ -1,9 +1,9 @@
 import { type Configuration, LogLevel } from "@azure/msal-browser";
 
 // IMPORTANT: Replace these placeholders with your actual Azure AD App Registration details
-const FRONTEND_APP_CLIENT_ID = "c1c02ec7-b99b-402c-87d5-5be79d1fa833"; // Client ID of your Frontend App Registration
-const TENANT_ID = "31a47948-63be-48e4-905c-da01be0ac05b"; // Your Azure AD Tenant ID
-const API_APP_CLIENT_ID_URI = "3ebf717c-3423-4576-8aa8-3d9d03130ff0"; // Application ID URI of your Backend API App Registration (if used)
+const FRONTEND_APP_CLIENT_ID = import.meta.env.VITE_FRONTEND_APP_CLIENT_ID; // Client ID of your Frontend App Registration
+const TENANT_ID = import.meta.env.VITE_TENANT_ID; // Your Azure AD Tenant ID
+const API_APP_CLIENT_ID_URI = import.meta.env.VITE_API_APP_CLIENT_ID_URI; // Application ID URI of your Backend API App Registration (if used)
 
 // Config object to be passed to Msal on creation
 export const msalConfig: Configuration = {
