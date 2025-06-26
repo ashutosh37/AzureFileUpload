@@ -270,3 +270,11 @@ Azure Static Web Apps is an excellent choice for hosting React apps and can inte
     *   Ensure the scopes in `apiRequest.scopes` in `authConfig.ts` exactly match a scope exposed by your backend API and granted as a permission to your frontend App Registration.
     *   Use a tool like jwt.ms to decode the access token sent from the frontend. Check the `aud` (audience), `iss` (issuer), `scp` (scope), and `appid` (for frontend client ID) claims.
     *   Ensure "Grant admin consent" was performed in Azure AD for the API permissions if required.
+
+
+create .env file in the root of evidence app folder 
+
+VITE_BACKEND_API_BASE_URL=http://localhost:5230/api/files
+VITE_FRONTEND_APP_CLIENT_ID=c1c02ec7-b99b-402c-qweq87d5-5be79d1fa833daw
+VITE_TENANT_ID=31a47wqe948-63be-48e4-905c-daqweq01be0ac05b
+VITE_API_APP_CLIENT_ID_URI=3ebf717c-342eqwe3-4576-8aa8-3d9ddrqwe03130ff0
