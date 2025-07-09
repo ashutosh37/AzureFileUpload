@@ -10,7 +10,8 @@ export const msalConfig: Configuration = {
     auth: {
         clientId: FRONTEND_APP_CLIENT_ID,
         authority: `https://login.microsoftonline.com/${TENANT_ID}`,
-        redirectUri: "/", // Must match a redirect URI in your Frontend App Registration
+        redirectUri: "http://localhost:5173/", // Must match a redirect URI in your Frontend App Registration
+        knownAuthorities: [`https://login.microsoftonline.com/${TENANT_ID}`],
         postLogoutRedirectUri: "/", // Optional: Where to redirect after logout
     },
     cache: {
