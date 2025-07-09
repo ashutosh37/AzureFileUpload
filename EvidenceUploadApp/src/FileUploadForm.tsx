@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent, type DragEvent, useEffect, useRef } from 'react';
-import { useMsal } from "@azure/msal-react";
+import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { apiRequest } from "./authConfig";
 import type { DisplayItem, FileUploadFormProps } from "./interfaces";
@@ -12,11 +12,19 @@ import { FileListing } from './components/FileListing';
 import * as apiService from './services/apiService';
 import { Pagination } from './components/Pagination';
 
+interface Matter {
+  id: string;
+  name: string;
+}
 
 function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadFormProps) {
   const { instance, accounts } = useMsal();
+  const isAuthenticated = useIsAuthenticated();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [containerNameInput, setContainerNameInput] = useState(''); // Renamed to avoid confusion
+  const [matters, setMatters] = useState<Matter[]>([]);
+  const [isLoadingMatters, setIsLoadingMatters] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null); // Ref for the file input element
   
   const [destinationPath, setDestinationPath] = useState<string>(''); // Path for the new upload
@@ -49,6 +57,32 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
     }
   }, [accounts, instance]);
 
+  // useEffect to fetch matters from the new API endpoint
+  useEffect(() => {
+    // Only fetch if we have a token, are authenticated, and are not on a pre-set matter route
+    if (accessToken && isAuthenticated && !initialContainerName) {
+      const fetchMatters = async () => {
+        setIsLoadingMatters(true);
+        try {
+          // This fetch call assumes your apiService is not yet updated.
+          // In a real scenario, this would be `apiService.getMatters(getAuthHeaders)`.
+          const response = await fetch(`${import.meta.env.VITE_BACKEND_API_BASE_URL}/matters`, {
+            headers: getAuthHeaders(),
+          });
+          if (!response.ok) throw new Error(`Failed to fetch matters: ${response.statusText}`);
+          const data: Matter[] = await response.json();
+          setMatters(data);
+        } catch (error) {
+          console.error("Error fetching matters:", error);
+          setUploadError("Could not load the list of matters.");
+        } finally {
+          setIsLoadingMatters(false);
+        }
+      };
+      fetchMatters();
+    }
+  }, [accessToken, isAuthenticated, initialContainerName]);
+
   const getAuthHeaders = (isFormData: boolean = false) => {
     if (!accessToken) return {};
     const headers: HeadersInit = { 'Authorization': `Bearer ${accessToken}` };
@@ -58,19 +92,20 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
     return headers;
   };
 
+  const handleMatterSelectionChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const selectedMatterId = event.target.value;
+    setContainerNameInput(selectedMatterId);
+    if (selectedMatterId) {
+      fetchAndSetRawFiles(selectedMatterId);
+    }
+  };
+
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
       setFilesToProcess(Array.from(files).map(f => ({ file: f, overwrite: false, status: 'pending' })));
       setUploadError('');
     }
-  };
-
-  const handleContainerNameChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setContainerNameInput(event.target.value);
-    // When container name input changes, we don't immediately clear/fetch. Fetching is tied to the button.
-    // setFilesInContainer([]); 
-    // setDisplayedContainerForFiles('');
   };
 
   const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
@@ -127,6 +162,9 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
     setUploadStatus,
     setUploadError,
   });
+
+  const currentMatterName =
+    matters.find((m) => m.id === displayedContainerForFiles)?.name || displayedContainerForFiles;
 
   // Effect to set initial container name from props
   useEffect(() => {
@@ -234,66 +272,100 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
 
   return (
     // Parent flex container: stacks vertically on small screens, horizontally on large screens
-    <div className="flex flex-col gap-6 w-full"> {/* Always stack vertically */}
+    <div className="flex flex-col gap-6 w-full">
+      {/* Container Selection Panel */}
+      {!initialContainerName && (
+        <div className="bg-white p-6 rounded-xl shadow-2xl">
+          <label htmlFor="matter-select" className="block text-left text-gray-700 text-sm font-bold mb-2">
+            Select Matter:
+          </label>
+          <div className="relative">
+            <select
+              id="matter-select"
+              value={containerNameInput}
+              onChange={handleMatterSelectionChange}
+              disabled={isLoadingMatters || accounts.length === 0 || !accessToken}
+              className="shadow-sm appearance-none border border-gray-300 rounded-md w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-200 disabled:cursor-not-allowed"
+            >
+              <option value="">{isLoadingMatters ? 'Loading matters...' : 'Select a matter'}</option>
+              {matters.map((matter) => (
+                <option key={matter.id} value={matter.id}>
+                  {matter.name}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Left Panel: Upload Form */}
-      <UploadPane
-        containerNameInput={containerNameInput}
-        onContainerNameChange={handleContainerNameChange}
-        destinationPath={destinationPath}
-        onDestinationPathChange={(e) => setDestinationPath(e.target.value)}
-        onFetchFiles={() => fetchAndSetRawFiles(containerNameInput)}
-        isLoadingFiles={isLoadingFiles}
-        displayedContainerForFiles={displayedContainerForFiles}
-        accounts={accounts}
-        accessToken={accessToken}
-        initialContainerName={initialContainerName}
-        initialFolderPath={initialFolderPath}
-        onFileChange={handleFileChange}
-        onDrop={handleDrop}
-        filesToProcess={filesToProcess}
-        fileInputRef={fileInputRef}
-        onUpload={handleUpload}
-        uploadStatus={uploadStatus}
-        uploadError={uploadError}
-      />
+      {/* Upload Pane - now sits between container selection and file list */}
+      {displayedContainerForFiles && (
+        <UploadPane
+          destinationPath={destinationPath}
+          onDestinationPathChange={(e) => setDestinationPath(e.target.value)}
+          accounts={accounts}
+          accessToken={accessToken}
+          initialFolderPath={initialFolderPath}
+          onFileChange={handleFileChange}
+          onDrop={handleDrop}
+          filesToProcess={filesToProcess}
+          fileInputRef={fileInputRef}
+          onUpload={handleUpload}
+          uploadStatus={uploadStatus}
+          uploadError={uploadError}
+          isContainerSelected={!!displayedContainerForFiles}
+        />
+      )}
 
-      {/* Right Panel: File List */}
-      <div className="flex gap-6"> {/* The Breadcrumbs component should go inside this div */}
-        <div className="flex-grow bg-white p-8 rounded-xl shadow-2xl flex flex-col min-w-0"> {/* Takes remaining width */}
-          <div className="flex justify-between items-center mb-4 min-h-[32px]"> {/* Added min-h to prevent layout shift */}
-            <h3 className="text-xl font-semibold text-gray-700 flex-grow truncate">
+      {/* Main Content Area: File List & Properties */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left Panel: File List */}
+        <div className="flex-grow bg-white p-8 rounded-xl shadow-2xl flex flex-col min-w-0">
+          <div className="flex justify-between items-center mb-4 min-h-[28px]"> {/* Adjusted min-h */}
+            <div className="flex items-center text-sm text-gray-600 flex-grow truncate">
               {displayedContainerForFiles ? (
-                <>
+                <div className="flex items-center flex-shrink-0">
                   {initialContainerName ? (
-                    <span className="text-gray-700">Container: '{displayedContainerForFiles}'</span>
+                    <span className="flex items-center text-gray-700">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                      </svg>
+                      <span className="font-medium">{displayedContainerForFiles}</span>
+                    </span>
                   ) : (
                     <span
-                      className="text-blue-600 hover:underline cursor-pointer"
+                      className="flex items-center text-blue-600 hover:underline cursor-pointer"
                       onClick={() => handleBreadcrumbClick('')} // Go to root of container
                     >
-                      Container: '{displayedContainerForFiles}'
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                      </svg>
+                      <span className="font-medium">{displayedContainerForFiles}</span>
                     </span>
                   )}
                   <Breadcrumbs
                     currentPath={currentPath}
-                    initialFolderPath={initialFolderPath}
                     handleBreadcrumbClick={handleBreadcrumbClick}
                   />
-                </>
+                </div>
               ) : (
-                "Files in Container"
+                <h3 className="text-xl font-semibold text-gray-700">Files in Container</h3>
               )}
-            </h3>
-            {/* Breadcrumbs Component Here */}
+            </div>
 
             {/* Hide "Up" button if at the root of the initial folder path */}
             {currentPath && (!initialFolderPath || currentPath !== initialFolderPath) && (
               <button 
                 onClick={handleGoUp}
-                className="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-1 px-3 rounded-md flex-shrink-0"
+                className="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-1 px-2 rounded-md flex-shrink-0 flex items-center"
               >
-                &uarr; Up
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                </svg>
+                Up
               </button>
             )}
           </div>
@@ -313,7 +385,7 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
               </div>
           )}
 
-          {isLoadingFiles ? ( 
+          {isLoadingFiles ? (
             <div className="flex-grow flex justify-center items-center">
               <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -338,7 +410,7 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
               />
             ) : (
               <div className="flex-grow flex justify-center items-center">
-                <p className="text-gray-600">No items found in '{displayedContainerForFiles}{currentPath ? `/${currentPath}` : ''}'.</p>
+                <p className="text-gray-600">No items found in '{currentMatterName}{currentPath ? `/${currentPath}` : ''}'.</p>
               </div>
             )
           ) : (
@@ -357,13 +429,17 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
             handleNextPage={handleNextPage}
           />
         </div>
-        {displayedContainerForFiles && <PropertiesPane
-          item={selectedItem}
-          containerName={displayedContainerForFiles}
-          onRefresh={refreshFilesAndSelection}
-          accessToken={accessToken}
-          getAuthHeaders={getAuthHeaders}
-        />}
+
+        {/* Right Panel: Properties */}
+        <div className="lg:w-96 flex-shrink-0">
+          {displayedContainerForFiles && <PropertiesPane
+            item={selectedItem}
+            containerName={displayedContainerForFiles}
+            onRefresh={refreshFilesAndSelection}
+            accessToken={accessToken}
+            getAuthHeaders={getAuthHeaders}
+          />}
+        </div>
       </div>
     </div>
     );

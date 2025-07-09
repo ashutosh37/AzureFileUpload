@@ -3,10 +3,12 @@ import FileUploadForm from './FileUploadForm';
 import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal, MsalAuthenticationTemplate } from '@azure/msal-react';
 import { loginRequest } from "./authConfig";
 import { InteractionType } from '@azure/msal-browser';
-import { Routes, Route, useParams } from 'react-router-dom';
+import { Routes, Route, useParams, useLocation } from 'react-router-dom';
 
 function App() {
   const { instance, accounts } = useMsal();
+  const location = useLocation();
+  const isMatterRoute = location.pathname.startsWith('/matter/');
   const handleLogin = () => {
     instance.loginPopup(loginRequest).catch(e => {
       console.error("Login failed: ", e);
@@ -21,32 +23,34 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-between">
-      <header className="bg-blue-700 text-white p-4 shadow-md">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="text-xl font-semibold">Evidence Upload Portal</div>
-          <div>
-            <AuthenticatedTemplate>
-              <span className="mr-4">
-                Welcome, {accounts[0]?.name || accounts[0]?.username}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md transition duration-150 ease-in-out"
-              >
-                Logout
-              </button>
-            </AuthenticatedTemplate>
-            <UnauthenticatedTemplate>
-              <button
-                onClick={handleLogin}
-                className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md transition duration-150 ease-in-out"
-              >
-                Login
-              </button>
-            </UnauthenticatedTemplate>
+      {!isMatterRoute && (
+        <header className="bg-blue-700 text-white p-4 shadow-md">
+          <div className="container mx-auto flex justify-between items-center">
+            <div className="text-xl font-semibold">Evidence Upload Portal</div>
+            <div>
+              <AuthenticatedTemplate>
+                <span className="mr-4">
+                  Welcome, {accounts[0]?.name || accounts[0]?.username}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md transition duration-150 ease-in-out"
+                >
+                  Logout
+                </button>
+              </AuthenticatedTemplate>
+              <UnauthenticatedTemplate>
+                <button
+                  onClick={handleLogin}
+                  className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md transition duration-150 ease-in-out"
+                >
+                  Login
+                </button>
+              </UnauthenticatedTemplate>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Use react-router-dom for routing */}
       <Routes>
@@ -69,9 +73,11 @@ function App() {
         <Route path="/matter/:matterId/*" element={<MatterFolderRoute />} />
       </Routes>
 
-      <footer className="bg-gray-800 text-white p-4 text-center text-sm">
-        © {new Date().getFullYear()} Evidence Upload App. All rights reserved.
-      </footer>
+      {!isMatterRoute && (
+        <footer className="bg-gray-800 text-white p-4 text-center text-sm">
+          © {new Date().getFullYear()} Evidence Upload App. All rights reserved.
+        </footer>
+      )}
     </div>
   );
 }
@@ -84,7 +90,7 @@ const MatterFolderRoute = () => {
   const formattedFolderPath = folderPath ? (folderPath.endsWith('/') ? folderPath : folderPath + '/') : '';
 
   return (
-    <main className="flex-grow w-full py-8 px-4 sm:px-6 lg:px-8">
+    <main className="flex-grow w-full p-4 sm:p-6 lg:p-8">
       {/* MsalAuthenticationTemplate ensures user is authenticated before rendering FileUploadForm. */}
       {/* Use InteractionType.Popup from msal-react for correct type assignment. */}
       <MsalAuthenticationTemplate interactionType={InteractionType.Popup} authenticationRequest={loginRequest}>

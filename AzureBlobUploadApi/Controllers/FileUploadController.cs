@@ -482,6 +482,25 @@ namespace MyBlobUploadApi.Controllers
             }
         }
 
+        [HttpGet("matters")]
+        [ProducesResponseType(typeof(IEnumerable<object>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public IActionResult GetMatters()
+        {
+            // This is a dummy endpoint. In a real application, you would query
+            // your data source (e.g., Dataverse, SQL) to get a list of matters
+            // the current user has access to.
+            // The [Authorize] attribute on the controller ensures this is only accessible to logged-in users.
+
+            var matters = new[]
+            {
+                new { id = "matter1234", name = "Matter 1234" },
+                new { id = "matter4567", name = "Matter 4567" }
+            };
+
+            return Ok(matters);
+        }
+
         /// <summary>
         /// Checks if the authenticated user is authorized to perform restricted actions.
         /// </summary>
