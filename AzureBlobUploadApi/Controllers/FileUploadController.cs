@@ -11,6 +11,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Security.Principal;
 
 namespace MyBlobUploadApi.Controllers
 {
@@ -485,17 +486,71 @@ namespace MyBlobUploadApi.Controllers
         [HttpGet("matters")]
         [ProducesResponseType(typeof(IEnumerable<object>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public IActionResult GetMatters()
+        public async Task<IActionResult> GetMattersAsync()
         {
             // This is a dummy endpoint. In a real application, you would query
             // your data source (e.g., Dataverse, SQL) to get a list of matters
             // the current user has access to.
             // The [Authorize] attribute on the controller ensures this is only accessible to logged-in users.
 
+            // Get user's email from the token claims.
+            // The 'preferred_username' claim often contains the user's email/UPN.
+            
+            foreach (var claim in HttpContext.User.Claims)
+            {
+                Console.WriteLine($"Type: {claim.Type}, Value: {claim.Value}");
+            }
+
+            var userEmail = HttpContext.User.Claims.FirstOrDefault(c => c.Type == "upn" || c.Type == "upn" || c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn")?.Value ?? "N/A";
+            Console.WriteLine(userEmail);
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                // Fallback to other possible email claims if needed
+                userEmail = HttpContext.User.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
+            }
+
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                _logger.LogWarning("Could not determine user email from token claims.");
+                // Depending on requirements, you might want to return an error here
+                // return BadRequest(new { Message = "Could not determine user identity." });
+            }
+            else
+            {
+                _logger.LogInformation("GetMatters request received for user: {UserEmail}", userEmail);
+            }
+                var dataverseScope = _configuration["Dataverse:Scopes"];
+                var dataverseScopes = new[] { dataverseScope };
+                var accessToken = await _tokenAcquisition.GetAccessTokenForUserAsync(dataverseScopes);
+                // 3. Call the Dataverse API to check for team membership.
+                var client = _httpClientFactory.CreateClient();
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                client.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
+                client.DefaultRequestHeaders.Add("OData-Version", "4.0");
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                
+                var dataverseBaseUrl = _configuration["Dataverse:BaseUrl"];
+            // TODO: Use userEmail to query Dynamics 365/Dataverse for matters this user can access.
+            //api/data/v9.2/fwotrace_matterteammembers?$select=fwotrace_matterteammemberid,fwotrace_name,createdon&$expand=fwotrace_MatterTeamId($select=fwotrace_name;$expand=fwotrace_MatterId($select=fwotrace_mattertitle)),fwotrace_MemberId($select=systemuserid)&$filter=(fwotrace_securityrole eq 230490000) and (fwotrace_MatterTeamId/fwotrace_matterteamid ne null) and (fwotrace_MemberId/internalemailaddress eq %27Ashutosh.Nigam%40fwo.gov.au%27)&$orderby=fwotrace_name asc
+            var requestUrl = $"{dataverseBaseUrl}/api/data/v9.2/fwotrace_matterteammembers?$select=fwotrace_matterteammemberid,fwotrace_name,createdon&$expand=fwotrace_MatterTeamId($select=fwotrace_name;$expand=fwotrace_MatterId($select=fwotrace_mattertitle)),fwotrace_MemberId($select=systemuserid)&$filter=(fwotrace_securityrole eq 230490000) and (fwotrace_MatterTeamId/fwotrace_matterteamid ne null) and (fwotrace_MemberId/internalemailaddress eq {userEmail})&$orderby=fwotrace_name asc";
+            Console.WriteLine(requestUrl);
+            var response = await client.GetAsync(requestUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                Console.WriteLine(jsonResponse);
+                using (var doc = JsonDocument.Parse(jsonResponse))
+                {
+                    var userArray = doc.RootElement.GetProperty("value");
+                }
+            }
+
             var matters = new[]
             {
-                new { id = "matter1234", name = "Matter 1234" },
-                new { id = "matter4567", name = "Matter 4567" }
+                new { id = "matter001-projphoenix", name = "Project Phoenix" },
+                new { id = "matter002-opskyline", name = "Operation Skyline" },
+                new { id = "matter003-case734", name = "Case File 734" },
+                new { id = "matter-final-review", name = "Final Review Documents" }
             };
 
             return Ok(matters);
