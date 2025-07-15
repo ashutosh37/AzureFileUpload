@@ -276,16 +276,13 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
       {/* Container Selection Panel */}
       {!initialContainerName && (
         <div className="bg-white p-6 shadow-2xl">
-        <label htmlFor="matter-select" className="block text-left text-gray-700 text-sm font-bold mb-2">
-            Select Matter:
-          </label>
           <div className="relative">
             <select
               id="matter-select"
               value={containerNameInput}
               onChange={handleMatterSelectionChange}
               disabled={isLoadingMatters || accounts.length === 0 || !accessToken}
-              className="shadow-sm appearance-none border border-gray-300 rounded-md w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-200 disabled:cursor-not-allowed"
+              className="shadow-sm appearance-none border border-gray-300 w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-200 disabled:cursor-not-allowed"
             >
               <option value="">{isLoadingMatters ? 'Loading matters...' : 'Select a matter'}</option>
               {matters.map((matter) => (
