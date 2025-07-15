@@ -46,6 +46,10 @@
               "target": "Package",
               "version": "[12.24.0, )"
             },
+            "MSGReader": {
+              "target": "Package",
+              "version": "[6.0.1, )"
+            },
             "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",
               "version": "[8.0.1, )"
@@ -53,6 +57,10 @@
             "Microsoft.Identity.Web": {
               "target": "Package",
               "version": "[3.9.3, )"
+            },
+            "MimeKit": {
+              "target": "Package",
+              "version": "[4.13.0, )"
             },
             "Swashbuckle.AspNetCore": {
               "target": "Package",

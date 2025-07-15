@@ -24,7 +24,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-between">
       {!isMatterRoute && (
-        <header className="bg-blue-700 text-white p-4 shadow-md">
+        <header className="bg-gray-800 text-white p-4 shadow-md">
           <div className="container mx-auto flex justify-between items-center">
             <div className="text-xl font-semibold">Evidence Upload Portal</div>
             <div>

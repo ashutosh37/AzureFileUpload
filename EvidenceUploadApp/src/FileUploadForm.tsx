@@ -272,11 +272,11 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
 
   return (
     // Parent flex container: stacks vertically on small screens, horizontally on large screens
-    <div className="flex flex-col gap-6 w-full">
+    <div className="flex flex-col gap-2 w-full">
       {/* Container Selection Panel */}
       {!initialContainerName && (
-        <div className="bg-white p-6 rounded-xl shadow-2xl">
-          <label htmlFor="matter-select" className="block text-left text-gray-700 text-sm font-bold mb-2">
+        <div className="bg-white p-6 shadow-2xl">
+        <label htmlFor="matter-select" className="block text-left text-gray-700 text-sm font-bold mb-2">
             Select Matter:
           </label>
           <div className="relative">
@@ -321,13 +321,13 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
       )}
 
       {/* Main Content Area: File List & Properties */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row">
         {/* Left Panel: File List */}
-        <div className="flex-grow bg-white p-8 rounded-xl shadow-2xl flex flex-col min-w-0">
+        <div className="flex-grow bg-white p-8 shadow-2xl flex flex-col min-w-0">
           <div className="flex justify-between items-center mb-4 min-h-[28px]"> {/* Adjusted min-h */}
             <div className="flex items-center text-sm text-gray-600 flex-grow truncate">
               {displayedContainerForFiles ? (
-                <div className="flex items-center flex-shrink-0">
+              <div className="flex items-center flex-shrink-0">
                   {initialContainerName ? (
                     <span className="flex items-center text-gray-700">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
@@ -377,7 +377,7 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
                   onClick={handleBulkDelete}
                   disabled={selectedFiles.length === 0}
                   className={`bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md text-sm ${
-                    selectedFiles.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                  selectedFiles.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
                   Delete Selected ({selectedFiles.length})
@@ -431,7 +431,7 @@ function FileUploadForm({ initialContainerName, initialFolderPath }: FileUploadF
         </div>
 
         {/* Right Panel: Properties */}
-        <div className="lg:w-96 flex-shrink-0">
+        <div className="lg:w-[32rem] flex-shrink-0">
           {displayedContainerForFiles && <PropertiesPane
             item={selectedItem}
             containerName={displayedContainerForFiles}

@@ -128,3 +128,18 @@ export const updateMetadata = async (
   }
   // No content is expected on success, so we don't need to return response.json()
 };
+
+export const getMessageFileContent = async (
+  containerName: string,
+  blobName: string,
+  getAuthHeaders: (isFormData?: boolean) => HeadersInit
+): Promise<any> => {
+  const response = await fetch(`${backendApiBaseUrl}/message-content?targetContainerName=${encodeURIComponent(containerName)}&blobName=${encodeURIComponent(blobName)}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to get message content: ${response.status} - ${errorText || response.statusText}`);
+  }
+  return response.json();
+};

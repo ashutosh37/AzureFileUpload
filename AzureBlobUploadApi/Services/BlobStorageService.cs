@@ -269,10 +269,10 @@ namespace MyBlobUploadApi.Services
             );
 
             var containerClient = blobServiceClient.GetBlobContainerClient(targetContainerName);
-            
+
             // GetBlobClient does not make a network call. ExistsAsync does.
             var blobClient = containerClient.GetBlobClient(blobName);
-            
+
             // Check if the blob exists
             return await blobClient.ExistsAsync();
         }
@@ -399,6 +399,57 @@ namespace MyBlobUploadApi.Services
                 return metadata;
             }
             return null;
+        }
+
+        public async Task<Stream> DownloadBlobAsync(string containerName, string blobName)
+        {
+            var accountDetail = _storageAccounts.FirstOrDefault();
+            if (accountDetail == null || string.IsNullOrWhiteSpace(accountDetail.AccountName) || string.IsNullOrWhiteSpace(accountDetail.AccountKey))
+            {
+                _logger.LogError("No valid storage account configuration found for getting blob metadata.");
+                throw new InvalidOperationException("Storage account for metadata retrieval is not configured properly.");
+            }
+            var blobServiceClient = new BlobServiceClient($"DefaultEndpointsProtocol=https;AccountName={accountDetail.AccountName};AccountKey={accountDetail.AccountKey};EndpointSuffix=core.windows.net");
+            var containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+            var blobClient = containerClient.GetBlobClient(blobName);
+
+            if (await blobClient.ExistsAsync())
+            {
+                var stream = new MemoryStream();
+                await blobClient.DownloadToAsync(stream);
+                stream.Position = 0;
+                return stream;
+            }
+
+            return null;
+        }
+        public async Task UploadBlobAsync(string containerName, string blobName, Stream content, bool overwrite)
+        {
+            try
+            {
+                var accountDetail = _storageAccounts.FirstOrDefault();
+                if (accountDetail == null || string.IsNullOrWhiteSpace(accountDetail.AccountName) || string.IsNullOrWhiteSpace(accountDetail.AccountKey))
+                {
+                    _logger.LogError("No valid storage account configuration found for getting blob metadata.");
+                    throw new InvalidOperationException("Storage account for metadata retrieval is not configured properly.");
+                }
+                var blobServiceClient = new BlobServiceClient($"DefaultEndpointsProtocol=https;AccountName={accountDetail.AccountName};AccountKey={accountDetail.AccountKey};EndpointSuffix=core.windows.net");
+                var containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+                BlobClient blobClient = containerClient.GetBlobClient(blobName);
+
+                if (!overwrite && await blobClient.ExistsAsync())
+                {
+                    _logger.LogWarning("Blob '{BlobName}' already exists in container '{ContainerName}' and overwrite is false.", blobName, containerName);
+                    return;
+                }
+
+                await blobClient.UploadAsync(content, overwrite);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading blob {BlobName} to container {ContainerName}", blobName, containerName);
+                throw; // Rethrow to allow the caller to handle it.
+            }
         }
     }
 }

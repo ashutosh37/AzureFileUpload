@@ -129,6 +129,13 @@ export function useFileListing({
     });
 
     setDisplayedItems(sortedItems);
+    // Automatically select the first item in the list when the view loads/changes.
+    if (sortedItems.length > 0) {
+      setSelectedItem(sortedItems[0]);
+    } else {
+      // If the list is empty (e.g., navigating to an empty folder), ensure no item is selected.
+      setSelectedItem(null);
+    }
   }, [rawBlobList, currentPath, sortColumn, sortDirection]);
 
   useEffect(() => {

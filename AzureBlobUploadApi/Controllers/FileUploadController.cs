@@ -10,8 +10,10 @@ using System.Net; // Required for WebProxy
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using MimeKit;
 using System.Text.Json;
 using System.Security.Principal;
+using MsgReader.Outlook;
 
 namespace MyBlobUploadApi.Controllers
 {
@@ -547,7 +549,7 @@ namespace MyBlobUploadApi.Controllers
 
             var matters = new[]
             {
-                new { id = "matter001-projphoenix", name = "Project Phoenix" },
+                new { id = "matter1234", name = "Matter 1234" },
                 new { id = "matter002-opskyline", name = "Operation Skyline" },
                 new { id = "matter003-case734", name = "Case File 734" },
                 new { id = "matter-final-review", name = "Final Review Documents" }
@@ -555,6 +557,98 @@ namespace MyBlobUploadApi.Controllers
 
             return Ok(matters);
         }
+
+        [HttpGet("message-content")]
+        [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetMessageContent(string targetContainerName, string blobName)
+        {
+            if (string.IsNullOrWhiteSpace(targetContainerName) || string.IsNullOrWhiteSpace(blobName))
+            {
+                return BadRequest(new { Message = "Container and blob names must be provided." });
+            }
+
+            try
+            {
+                using (Stream blobStream = await _blobStorageService.DownloadBlobAsync(targetContainerName, blobName))
+                {
+                    if (blobStream == null)
+                    {
+                        return NotFound(new { Message = $"Blob '{blobName}' not found in container '{targetContainerName}'." });
+                    }
+
+                    var extension = Path.GetExtension(blobName).ToLowerInvariant();
+
+                    string from = "";
+                    string to = "";
+                    string subject = "";
+                    string bodyText = "";
+                    string bodyHtml = "";
+
+                    if (extension == ".eml")
+                    {
+                        var parserOptions = ParserOptions.Default.Clone();
+                        var message = await MimeMessage.LoadAsync(parserOptions, blobStream, CancellationToken.None);
+
+                        from = message.From.ToString();
+                        to = message.To.ToString();
+                        subject = message.Subject;
+                        bodyText = message.TextBody ?? "";
+                        bodyHtml = message.HtmlBody ?? "";
+                    }
+                    else if (extension == ".msg")
+                    {
+                        using (var memoryStream = new MemoryStream())
+                        {
+                            await blobStream.CopyToAsync(memoryStream);
+                            memoryStream.Position = 0;
+
+                            using (var msg = new MsgReader.Outlook.Storage.Message(memoryStream))
+                            {
+                                var senderEmail = msg.Sender?.Email ?? "";
+                                var senderName = msg.Sender?.DisplayName ?? "";
+                                from = $"{senderEmail} ({senderName})";
+
+                                var recipients = msg.GetEmailRecipients(RecipientType.To, false, false);
+                                to = recipients != null ? string.Join(", ", recipients) : "";
+
+                                subject = msg.Subject;
+                                bodyText = msg.BodyText ?? "";
+                                bodyHtml = msg.BodyHtml ?? "";
+                            }
+                        }
+                    }
+                    else
+                    {
+                        return BadRequest(new { Message = "Unsupported file format. Only .eml and .msg files are supported." });
+                    }
+
+                    var messageData = new
+                    {
+                        From = from,
+                        To = to,
+                        Subject = subject,
+                        Text = bodyText,
+                        Html = bodyHtml
+                    };
+
+                    return Ok(messageData);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving or parsing message content for blob '{BlobName}' in container '{TargetContainerName}'.", blobName, targetContainerName);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Message = "Error retrieving or parsing message content.", Details = ex.Message });
+            }
+        }
+
+
+
+
+
+
 
         /// <summary>
         /// Checks if the authenticated user is authorized to perform restricted actions.

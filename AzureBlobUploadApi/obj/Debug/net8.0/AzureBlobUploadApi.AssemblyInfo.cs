@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AzureBlobUploadApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+10ddf7e0ecd56293941cc36edf37cf7349aa3bba")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+26c256cf9278cea4db36f5db432312eb45372af7")]
 [assembly: System.Reflection.AssemblyProductAttribute("AzureBlobUploadApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AzureBlobUploadApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

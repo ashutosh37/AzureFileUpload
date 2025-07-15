@@ -71,13 +71,13 @@ export const FileListing: React.FC<FileListingProps> = ({
                 <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
               )}
             </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+            {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => handleSort('checksum')}>
               Checksum
               {sortColumn === 'checksum' && (
                 <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
               )}
-            </th>
+            </th> */}
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Actions
             </th>
@@ -112,9 +112,9 @@ export const FileListing: React.FC<FileListingProps> = ({
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
               {!item.isFolder ? (item.metadata?.modifiedBy || 'N/A') : ''}
             </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
+            {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-left">
               {item.checksum}
-            </td>
+            </td> */}
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
               {!item.isFolder && (
                 <button 
