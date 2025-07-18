@@ -10,6 +10,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.IO.Compression; // Added for zip file handling
+using System.Security.Cryptography; // Added for SHA256 hash calculation
+using Azure.Storage.Blobs.Specialized;
 
 namespace MyBlobUploadApi.Services
 {
@@ -26,6 +29,119 @@ namespace MyBlobUploadApi.Services
             if (!_storageAccounts.Any())
             {
                 throw new ArgumentException("No storage accounts configured for SAS upload.", nameof(storageAccountsOptions));
+            }
+        }
+
+        public async Task UploadZipFileAndExtractAsync(string targetContainerName, string sourceContainerName, string sourceBlobName, string zipDocumentId)
+        {
+            var accountDetail = _storageAccounts.FirstOrDefault();
+            if (accountDetail == null || string.IsNullOrWhiteSpace(accountDetail.AccountName) || string.IsNullOrWhiteSpace(accountDetail.AccountKey))
+            {
+                _logger.LogError("No valid storage account configuration found for zip upload and extraction.");
+                throw new InvalidOperationException("Storage account for zip upload is not configured properly.");
+            }
+
+            var blobServiceClient = new BlobServiceClient(
+                $"DefaultEndpointsProtocol=https;AccountName={accountDetail.AccountName};AccountKey={accountDetail.AccountKey};EndpointSuffix=core.windows.net"
+            );
+            var targetContainerClient = blobServiceClient.GetBlobContainerClient(targetContainerName);
+            var sourceContainerClient = blobServiceClient.GetBlobContainerClient(sourceContainerName);
+
+            // Ensure the target container exists
+            await targetContainerClient.CreateIfNotExistsAsync();
+
+            // 1. Download the original ZIP file from the source container
+            BlobClient sourceZipBlobClient = sourceContainerClient.GetBlobClient(sourceBlobName);
+            if (!await sourceZipBlobClient.ExistsAsync())
+            {
+                _logger.LogError("Source ZIP file not found in blob storage: {SourceContainerName}/{SourceBlobName}", sourceContainerName, sourceBlobName);
+                throw new FileNotFoundException($"Source ZIP file '{sourceBlobName}' not found in container '{sourceContainerName}'.");
+            }
+
+            using (MemoryStream zipMemoryStream = new MemoryStream())
+            {
+                await sourceZipBlobClient.DownloadToAsync(zipMemoryStream);
+                zipMemoryStream.Position = 0; // Reset stream position after download
+
+                // 2. Upload the original ZIP file to the target container (if it's different from source)
+                // If target and source containers are the same, this is effectively a metadata update.
+                BlobClient targetZipBlobClient = targetContainerClient.GetBlobClient(sourceBlobName);
+                // We need to re-upload or copy to ensure it's in the target container with the new metadata
+                // For simplicity, we'll re-upload the stream. For large files, consider BlobClient.StartCopyFromUriAsync
+                zipMemoryStream.Position = 0; // Reset again for upload
+                await targetZipBlobClient.UploadAsync(zipMemoryStream, overwrite: true);
+                _logger.LogInformation("Original zip file {SourceBlobName} copied/uploaded to target container {TargetContainerName}.", sourceBlobName, targetContainerName);
+
+                // Set metadata for the original ZIP file in the target container
+                var zipMetadata = new Dictionary<string, string>
+                {
+                    { "DocumentId", zipDocumentId },
+                    { "ParentId", "" }, // Zip file has no parent
+                    { "IsZipFile", "true" },
+                    { "createdDate", DateTime.UtcNow.ToString("o") },
+                    { "modifiedDate", DateTime.UtcNow.ToString("o") }
+                };
+                await targetZipBlobClient.SetMetadataAsync(zipMetadata);
+
+                zipMemoryStream.Position = 0; // Reset stream position for unzipping
+
+                // 3. Unzip and upload contents to the target container
+                using (ZipArchive archive = new ZipArchive(zipMemoryStream, ZipArchiveMode.Read))
+                {
+                    foreach (ZipArchiveEntry entry in archive.Entries)
+                    {
+                        // Skip directories and empty entries
+                        if (string.IsNullOrEmpty(entry.Name) || entry.FullName.EndsWith("/"))
+                        {
+                            continue;
+                        }
+
+                        // Construct the blob name for the unzipped file to be in the same location as the zip
+                        string directoryPath = "";
+                        int lastSlashIndex = sourceBlobName.LastIndexOf('/');
+                        if (lastSlashIndex > -1)
+                        {
+                            directoryPath = sourceBlobName.Substring(0, lastSlashIndex + 1);
+                        }
+                        string unzippedBlobName = $"{directoryPath}{entry.FullName}";
+
+                        using (var entryStream = entry.Open())
+                        using (var fileMemoryStream = new MemoryStream())
+                        {
+                            await entryStream.CopyToAsync(fileMemoryStream);
+                            fileMemoryStream.Position = 0; // Reset for hashing
+
+                            // Calculate SHA256 hash for the unzipped file
+                            using (var sha256 = SHA256.Create())
+                            {
+                                byte[] hashBytes = await sha256.ComputeHashAsync(fileMemoryStream);
+                                string sha256Hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
+
+                                // Reset stream position after hash calculation for upload
+                                fileMemoryStream.Position = 0;
+
+                                BlobClient unzippedBlobClient = targetContainerClient.GetBlobClient(unzippedBlobName);
+
+                                // Generate a new DocumentId for the unzipped file
+                                int nextDocNumber = await GetNextDocumentNumberAsync(targetContainerName, "DOC"); // Assuming "DOC" prefix
+                                string unzippedDocumentId = $"DOC.{targetContainerName}.{nextDocNumber:D4}";
+
+                                var unzippedMetadata = new Dictionary<string, string>
+                                {
+                                    { "DocumentId", unzippedDocumentId },
+                                    { "parentId", zipDocumentId }, // Link to the original ZIP's DocumentId, using camelCase
+                                    { "SHA256HASH", sha256Hash },
+                                    { "createdDate", DateTime.UtcNow.ToString("o") },
+                                    { "modifiedDate", DateTime.UtcNow.ToString("o") }
+                                };
+
+                                await unzippedBlobClient.UploadAsync(fileMemoryStream, overwrite: true);
+                                await unzippedBlobClient.SetMetadataAsync(unzippedMetadata);
+                                _logger.LogInformation("Extracted file {UnzippedBlobName} uploaded with ParentId {ParentId}.", unzippedBlobName, zipDocumentId);
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -124,21 +240,28 @@ namespace MyBlobUploadApi.Services
             return new SasDownloadInfo { FullDownloadUrl = $"{frontDoorBlobUri}?{sasToken}" };
         }
 
+
+
         /// <summary>
-        /// Lists blobs in a container along with their SHA256 checksum from metadata.
+        /// Lists blobs in a container along with their SHA256 checksum from metadata, including virtual folders.
         /// </summary>
         /// <param name="targetContainerName">The name of the container.</param>
-        /// <returns>An enumerable of FileInfo objects.</returns>
-        // Explicitly use MyBlobUploadApi.Models.FileInfo in the return type
-        public async Task<PaginatedBlobList> ListBlobsAsync(string targetContainerName, int pageSize, string? continuationToken)
+        /// <param name="pageSize">Number of blobs to return per page (minimum 1).</param>
+        /// <param name="continuationToken">Continuation token for pagination, in the format 'prefix1:token1|prefix2:token2|...|currentIndex' or null for the first page.</param>
+        /// <returns>A PaginatedBlobList containing blobs and the next continuation token.</returns>
+        public async Task<PaginatedBlobList> ListBlobsAsync(string targetContainerName, int pageSize, string? folderPath, string? continuationToken, bool listFoldersOnly = false)
         {
             if (string.IsNullOrWhiteSpace(targetContainerName))
             {
                 throw new ArgumentException("Target container name cannot be empty.", nameof(targetContainerName));
             }
 
-            // For simplicity, use the first configured storage account.
-            // In a real sharded scenario, you might need a way to select the correct account.
+            if (pageSize < 1)
+            {
+                _logger.LogError("Invalid pageSize: {PageSize}. Must be at least 1.", pageSize);
+                throw new ArgumentException("Page size must be at least 1.", nameof(pageSize));
+            }
+
             var accountDetail = _storageAccounts.FirstOrDefault();
             if (accountDetail == null ||
                 string.IsNullOrWhiteSpace(accountDetail.AccountName) ||
@@ -150,20 +273,60 @@ namespace MyBlobUploadApi.Services
 
             var blobServiceClient = new BlobServiceClient(
                 $"DefaultEndpointsProtocol=https;AccountName={accountDetail.AccountName};AccountKey={accountDetail.AccountKey};EndpointSuffix=core.windows.net"
-            ); // Or construct connection string differently if needed
-
+            );
             var containerClient = blobServiceClient.GetBlobContainerClient(targetContainerName);
             var paginatedResult = new PaginatedBlobList();
             var fileInfos = new List<MyBlobUploadApi.Models.FileInfo>();
 
-            // Use AsPages for efficient pagination
-            var pages = containerClient.GetBlobsAsync(traits: BlobTraits.Metadata)
-                                       .AsPages(continuationToken, pageSize);
-
-            await foreach (Azure.Page<BlobItem> page in pages)
+            // Adjust prefix for listing based on folderPath
+            string prefixToUse = folderPath;
+            if (!string.IsNullOrEmpty(prefixToUse) && !prefixToUse.EndsWith("/"))
             {
-                foreach (BlobItem blobItem in page.Values)
+                prefixToUse += "/"; // Ensure prefix ends with "/" for folder listing
+            }
+
+            _logger.LogInformation("Listing blobs with prefix: '{Prefix}', continuation token: '{Token}'", prefixToUse ?? "root", continuationToken ?? "none");
+
+            // List blobs
+            var resultSegment = containerClient.GetBlobsAsync(prefix: prefixToUse, traits: BlobTraits.Metadata)
+                                             .AsPages(continuationToken, pageSize);
+
+            var uniqueFolders = new HashSet<string>();
+
+            await foreach (var page in resultSegment)
+            {
+                foreach (var blobItem in page.Values)
                 {
+                    if (listFoldersOnly && string.IsNullOrEmpty(folderPath))
+                    {
+                        // If we are at the root and only want folders
+                        var firstSlashIndex = blobItem.Name.IndexOf('/');
+                        if (firstSlashIndex > -1)
+                        {
+                            var folderName = blobItem.Name.Substring(0, firstSlashIndex);
+                            if (uniqueFolders.Add(folderName))
+                            {
+                                // Create a dummy FileInfo for the folder
+                                fileInfos.Add(new MyBlobUploadApi.Models.FileInfo
+                                {
+                                    Name = folderName + "/", // Represent as a folder
+                                    Checksum = "N/A",
+                                    Metadata = new Dictionary<string, string>(),
+                                    IsFolder = true // Indicate it's a folder
+                                });
+                            }
+                        }
+                        // Skip files at the root level when listFoldersOnly is true
+                        continue;
+                    }
+
+                    // Existing logic for files and subfolders when not in listFoldersOnly mode at root
+                    if (blobItem.Properties.ContentLength == 0 && blobItem.Name.EndsWith("/"))
+                    {
+                        _logger.LogInformation("Skipping directory placeholder blob: {BlobName}", blobItem.Name);
+                        continue;
+                    }
+
                     string checksum = "N/A";
                     if (blobItem.Metadata != null && blobItem.Metadata.TryGetValue("sha256hash", out var hashValue))
                     {
@@ -173,25 +336,56 @@ namespace MyBlobUploadApi.Services
                     var metadata = new Dictionary<string, string>();
                     if (blobItem.Metadata != null)
                     {
-                        // Normalize metadata keys to camelCase for consistent frontend consumption
                         foreach (var pair in blobItem.Metadata)
                         {
-                            // Convert first character to lowercase, keep rest as is.
-                            // This handles "DocumentId" -> "documentId", "createdDate" -> "createdDate", etc.
                             string normalizedKey = char.ToLowerInvariant(pair.Key[0]) + pair.Key.Substring(1);
                             metadata[normalizedKey] = pair.Value;
                         }
                     }
-                    _logger.LogInformation("BlobService: Retrieved metadata for {BlobName}: {Metadata}", blobItem.Name, string.Join(", ", metadata.Select(p => $"{p.Key}={p.Value}")));
-                    fileInfos.Add(new MyBlobUploadApi.Models.FileInfo { Name = blobItem.Name, Checksum = checksum, Metadata = metadata });
+
+                    string metadataString = metadata.Any() ? string.Join(", ", metadata.Select(p => $"{p.Key}={p.Value}")) : "none";
+                    _logger.LogInformation("Retrieved blob: {BlobName}, Metadata: {MetadataString}", blobItem.Name, metadataString);
+
+                    fileInfos.Add(new MyBlobUploadApi.Models.FileInfo
+                    {
+                        Name = blobItem.Name,
+                        Checksum = checksum,
+                        Metadata = metadata,
+                        IsFolder = false, // Default to false for files
+                        ParentId = metadata.TryGetValue("parentId", out var parentIdValue) ? parentIdValue : null // Populate ParentId
+                    });
                 }
 
-                paginatedResult.Items = fileInfos;
-                paginatedResult.NextContinuationToken = page.ContinuationToken;
-                break; // Process only one page at a time
+                if (!string.IsNullOrEmpty(page.ContinuationToken))
+                {
+                    paginatedResult.NextContinuationToken = page.ContinuationToken; // The continuation token is just the token from Azure
+                }
+                // If listFoldersOnly is true and we are at the root, we want to process all blobs to find all unique folders
+                // so we should not break after the first page. However, for simplicity and to avoid fetching all blobs
+                // in a very large container, we will still break after the first page for now. This might mean not all
+                // root folders are returned if they are on subsequent pages. A more robust solution would require
+                // iterating through all pages or using a different Azure SDK feature for hierarchical listing.
+                if (!listFoldersOnly || !string.IsNullOrEmpty(folderPath))
+                {
+                    break; // Process only the first page for now, unless listing root folders
+                }
             }
+
+            // If we were listing only folders, sort them by name before returning
+            if (listFoldersOnly && string.IsNullOrEmpty(folderPath))
+            {
+                paginatedResult.Items = fileInfos.OrderBy(f => f.Name).ToList();
+            }
+            else
+            {
+                paginatedResult.Items = fileInfos;
+            }
+            string returnedBlobs = paginatedResult.Items.Any() ? string.Join(", ", paginatedResult.Items.Select(i => i.Name)) : "none";
+            _logger.LogInformation("Returning {ItemCount} blobs for container {TargetContainerName} with prefix '{Prefix}': {ReturnedBlobs}",
+            fileInfos.Count, targetContainerName, prefixToUse ?? "root", returnedBlobs);
             return paginatedResult;
         }
+
 
         /// <summary>
         /// Calculates the next sequential document number for a given container based on existing blob metadata.

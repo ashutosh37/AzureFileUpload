@@ -95,3 +95,14 @@
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/pt/MsgReader.resources.dll
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/zh-CN/MsgReader.resources.dll
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/zh-TW/MsgReader.resources.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/Microsoft.Extensions.Logging.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.BarCodes.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.Charting.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.Cryptography.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.Quality.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.Shared.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.Snippets.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.System.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.WPFonts.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.dll

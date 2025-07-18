@@ -37,10 +37,4 @@ namespace MyBlobUploadApi.Models
         public string? FullUploadUrl => $"{BlobUri}?{SharedAccessSignature}";
     }
 
-    public class FileInfo
-    {
-        public string Name { get; set; } = string.Empty;
-        public string Checksum { get; set; } = string.Empty;
-        public Dictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>(); // Add metadata property
-    }
 }

@@ -32,7 +32,7 @@ export function useFileListing({
   const [selectedItem, setSelectedItem] = useState<DisplayItem | null>(null);
   const [displayedContainerForFiles, setDisplayedContainerForFiles] = useState<string>('');
 
-  const fetchAndSetRawFiles = async (containerToFetch: string) => {
+const fetchAndSetItems = async (containerToFetch: string, path: string | null = null, listFoldersOnly: boolean = false) => {
     if (!containerToFetch || !accessToken) {
       setUploadError("Container name and authentication are required to fetch files.");
       return;
@@ -41,8 +41,8 @@ export function useFileListing({
     setIsLoadingFiles(true);
     setUploadError('');
 
-    if (displayedContainerForFiles !== containerToFetch) {
-      setCurrentPath('');
+    // If we are changing the container or the path, reset relevant state
+    if (displayedContainerForFiles !== containerToFetch || currentPath !== path) {
       setRawBlobList([]);
       setDisplayedItems([]);
       setSelectedItem(null);
@@ -55,11 +55,12 @@ export function useFileListing({
     }
 
     try {
-      const data: { items: BackendFileInfo[]; nextContinuationToken: string | null } = await apiService.listFiles(containerToFetch, getAuthHeaders);
+      const data: { items: BackendFileInfo[]; nextContinuationToken: string | null } = await apiService.listFiles(containerToFetch, getAuthHeaders, path, null, listFoldersOnly);
       setRawBlobList(data.items);
       setNextPageToken(data.nextContinuationToken);
-      setPrevPageTokens([null]);
+      setPrevPageTokens([null]); // Reset pagination when fetching new path
       setDisplayedContainerForFiles(containerToFetch);
+      setCurrentPath(path || ''); // Update current path based on the fetch
     } catch (error) {
       setRawBlobList([]);
       setDisplayedItems([]);
@@ -79,7 +80,13 @@ export function useFileListing({
     setSelectedFiles([]);
 
     try {
-      const data: { items: BackendFileInfo[]; nextContinuationToken: string | null } = await apiService.listFiles(displayedContainerForFiles, getAuthHeaders, token);
+      const data: { items: BackendFileInfo[]; nextContinuationToken: string | null } = await apiService.listFiles(
+        displayedContainerForFiles,
+        getAuthHeaders,
+        currentPath, // Pass the current folder path for correct pagination context
+        token,       // The continuation token for the next page
+        false        // We are paginating files/folders, not just folders
+      );
       setRawBlobList(data.items);
       setNextPageToken(data.nextContinuationToken);
     } catch (error) {
@@ -101,12 +108,21 @@ export function useFileListing({
         const firstSegment = segments[0];
 
         if (segments.length > 1) {
-          const folderFullPath = currentPath + firstSegment;
+          const folderFullPath = currentPath + firstSegment + '/'; // Ensure folder paths end with '/'
           if (!itemsMap.has(folderFullPath)) {
-            itemsMap.set(folderFullPath, { id: folderFullPath, displayName: firstSegment, fullPath: folderFullPath, isFolder: true, checksum: "N/A" });
+            itemsMap.set(folderFullPath, { id: folderFullPath, displayName: firstSegment, fullPath: folderFullPath, isFolder: true, checksum: "N/A", parentId: currentPath || undefined });
           }
         } else {
-          itemsMap.set(blob.name, { id: blob.name, displayName: firstSegment, fullPath: blob.name, isFolder: false, checksum: blob.checksum, metadata: blob.metadata });
+          // This is a file or folder directly in the current path
+          // If currentPath is empty, we only want to show folders, not files.
+          // If currentPath is not empty, we show both files and folders.
+          // The condition `segments.length === 1` means it's either a file at the current level
+          // or a folder that is explicitly represented as a blob (e.g., "myfolder/").
+          // Assuming backend doesn't return explicit folder blobs, this branch is for files.
+          if (currentPath !== '') { // Only add files if not at the root
+            itemsMap.set(blob.name, { id: blob.name, displayName: firstSegment, fullPath: blob.name, isFolder: false, checksum: blob.checksum, metadata: blob.metadata, parentId: blob.parentId, documentId: blob.documentId });
+          }
+          // If currentPath is '', we do nothing here, effectively filtering out root-level files.
         }
       }
     });
@@ -116,7 +132,15 @@ export function useFileListing({
       switch (column) {
         case 'displayName': return item.displayName;
         case 'checksum': return item.checksum;
-        case 'documentId': case 'createdDate': case 'modifiedDate': case 'createdBy': case 'modifiedBy': return item.metadata?.[column] || '';
+        case 'documentId':
+          const docId = item.documentId;
+          if (docId === undefined || docId === null) return '';
+          const numDocId = Number(docId);
+          return isNaN(numDocId) ? docId : numDocId;
+        case 'parentId': return item.parentId || '';
+        case 'createdDate': return item.metadata?.createdDate ? new Date(item.metadata.createdDate).getTime() : 0;
+        case 'modifiedDate': return item.metadata?.modifiedDate ? new Date(item.metadata.modifiedDate).getTime() : 0;
+        case 'modifiedBy': return item.metadata?.modifiedBy || '';
         default: return '';
       }
     };
@@ -125,7 +149,11 @@ export function useFileListing({
       if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
       const aValue = getSortValue(a, sortColumn);
       const bValue = getSortValue(b, sortColumn);
-      return sortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      return sortDirection === 'asc' ? String(aValue).localeCompare(String(bValue)) : String(bValue).localeCompare(String(aValue));
     });
 
     setDisplayedItems(sortedItems);
@@ -140,9 +168,13 @@ export function useFileListing({
 
   useEffect(() => {
     if (initialContainerName && accessToken) {
-      fetchAndSetRawFiles(initialContainerName);
+      fetchAndSetItems(initialContainerName, initialFolderPath || null, !initialFolderPath); // Fetch root folders if no initial folder path, else fetch content of initial folder
     }
-    if (initialFolderPath) {
+  }, [initialContainerName, accessToken]);
+
+  useEffect(() => {
+    if (initialFolderPath)
+    {
       setCurrentPath(initialFolderPath);
     }
   }, [initialContainerName, initialFolderPath, accessToken]);
@@ -156,16 +188,20 @@ export function useFileListing({
     if (currentPath === '') return;
     const pathSegments = currentPath.slice(0, -1).split('/');
     pathSegments.pop();
-    setCurrentPath(pathSegments.length > 0 ? pathSegments.join('/') + '/' : '');
-    setSelectedItem(null);
+    const newPath = pathSegments.length > 0 ? pathSegments.join('/') + '/' : '';
+    fetchAndSetItems(displayedContainerForFiles, newPath, newPath === ''); // If going to root, list folders only
   };
 
   const handleBreadcrumbClick = (pathSegment: string) => {
-    setCurrentPath(pathSegment);
-    setSelectedItem(null);
+    fetchAndSetItems(displayedContainerForFiles, pathSegment, false);
   };
 
-  const handleNextPage = () => nextPageToken && goToPage(nextPageToken);
+  const handleNextPage = () => {
+    if (nextPageToken) {
+      setPrevPageTokens(prev => [...prev, nextPageToken]);
+      goToPage(nextPageToken);
+    }
+  };
   const handlePreviousPage = () => {
     if (prevPageTokens.length <= 1) return;
     const newPrevPageTokens = prevPageTokens.slice(0, -1);
@@ -227,18 +263,18 @@ export function useFileListing({
         setUploadStatus(`${selectedFiles.length} files were deleted successfully.`);
       } else {
         const errorDetails = await Promise.all(responses.filter(r => !r.ok).map(r => r.text()));
-        console.error("Some files failed to delete:", errorDetails);
+        console.error('Some files failed to delete:', errorDetails);
         setUploadError(`Some files failed to delete. Check the console for details.`);
       }
 
-      fetchAndSetRawFiles(displayedContainerForFiles);
+      fetchAndSetItems(displayedContainerForFiles, currentPath);
       setSelectedFiles([]);
     } catch (error) {
       setUploadError(error instanceof Error ? `Error deleting files: ${error.message}` : 'Could not delete files.');
     } finally {
-      setUploadStatus('');
-    }
+      setUploadStatus(''); // Clear status even if there was an error
+    }    
   };
 
-  return { displayedItems, currentPath, isLoadingFiles, displayedContainerForFiles, nextPageToken, prevPageTokens, sortColumn, sortDirection, selectedItem, selectedFiles, fetchAndSetRawFiles, handleSort, handleGoUp, handleBreadcrumbClick, handleNextPage, handlePreviousPage, setCurrentPath, setSelectedItem, handleCheckboxChange, handleSelectAll, handleBulkDelete };
+  return { displayedItems, currentPath, isLoadingFiles, displayedContainerForFiles, nextPageToken, prevPageTokens, sortColumn, sortDirection, selectedItem, selectedFiles, fetchAndSetItems, handleSort, handleGoUp, handleBreadcrumbClick, handleNextPage, handlePreviousPage, setCurrentPath, setSelectedItem, handleCheckboxChange, handleSelectAll, handleBulkDelete };
 }

@@ -37,7 +37,12 @@ export const PropertiesPane: React.FC<PropertiesPaneProps> = ({
     //setNewMetadataKey('');
     //setNewMetadataValue('');
     //setMetadataError('');
-    setActiveTab('properties');
+    // When a folder is selected, or no item is selected,
+    // we must be on the 'properties' tab. Otherwise, we don't change the tab,
+    // preserving the user's choice when switching between files.
+    if (!item || item.isFolder) {
+      setActiveTab('properties');
+    }
   }, [item]);
 
   if (!item) {

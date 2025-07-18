@@ -1,13 +1,27 @@
-const backendApiBaseUrl = import.meta.env.VITE_BACKEND_API_BASE_URL || 'http://localhost:5230/api/files';
+import type { RedactionCoordinate } from "../interfaces";
+
+const backendApiBaseUrl =
+  import.meta.env.VITE_BACKEND_API_BASE_URL ||
+  "http://localhost:5230/api/files";
 
 export const listFiles = async (
   containerName: string,
   getAuthHeaders: (isFormData?: boolean) => HeadersInit,
-  continuationToken: string | null = null
+  folderPath: string | null = null,
+  continuationToken: string | null = null,
+  listFoldersOnly: boolean = false
 ) => {
-  let url = `${backendApiBaseUrl}/list?targetContainerName=${encodeURIComponent(containerName)}`;
+  let url = `${backendApiBaseUrl}/list?targetContainerName=${encodeURIComponent(
+    containerName
+  )}`;
+  if (folderPath) {
+    url += `&folderPath=${encodeURIComponent(folderPath)}`;
+  }
   if (continuationToken) {
     url += `&continuationToken=${encodeURIComponent(continuationToken)}`;
+  }
+  if (listFoldersOnly) {
+    url += `&listFoldersOnly=true`;
   }
 
   const response = await fetch(url, {
@@ -16,12 +30,18 @@ export const listFiles = async (
 
   if (response.status === 403) {
     const errorBody = await response.json();
-    throw new Error(errorBody.Message || "You do not have access to view these files.");
+    throw new Error(
+      errorBody.Message || "You do not have access to view these files."
+    );
   }
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to list files for '${containerName}': ${response.status} - ${errorText || response.statusText}`);
+    throw new Error(
+      `Failed to list files for '${containerName}': ${response.status} - ${
+        errorText || response.statusText
+      }`
+    );
   }
 
   return response.json();
@@ -31,20 +51,26 @@ export const generateUploadUrls = async (
   containerName: string,
   getAuthHeaders: (isFormData?: boolean) => HeadersInit
 ) => {
-  const generateUrl = `${backendApiBaseUrl}/generate-upload-urls?targetContainerName=${encodeURIComponent(containerName)}`;
+  const generateUrl = `${backendApiBaseUrl}/generate-upload-urls?targetContainerName=${encodeURIComponent(
+    containerName
+  )}`;
   const response = await fetch(generateUrl, {
-    method: 'POST',
+    method: "POST",
     headers: getAuthHeaders(),
   });
 
   if (response.status === 403) {
     const errorBody = await response.json();
-    throw new Error(errorBody.Message || "You do not have access to perform this action.");
+    throw new Error(
+      errorBody.Message || "You do not have access to perform this action."
+    );
   }
 
   if (!response.ok) {
     const errorDetails = await response.text();
-    throw new Error(`Failed to get upload URL: ${response.status} ${response.statusText} - ${errorDetails}`);
+    throw new Error(
+      `Failed to get upload URL: ${response.status} ${response.statusText} - ${errorDetails}`
+    );
   }
 
   return response.json();
@@ -57,26 +83,34 @@ export const uploadFileViaSAS = async (
   overwrite: boolean,
   getAuthHeaders: (isFormData?: boolean) => HeadersInit
 ) => {
-  const finalPath = destinationPath.trim() === '' ? '' : (destinationPath.trim().endsWith('/') ? destinationPath.trim() : destinationPath.trim() + '/');
+  const finalPath =
+    destinationPath.trim() === ""
+      ? ""
+      : destinationPath.trim().endsWith("/")
+      ? destinationPath.trim()
+      : destinationPath.trim() + "/";
   const blobNameForUpload = finalPath + file.name;
 
   const formData = new FormData();
-  formData.append('containerSasUrl', containerSasDetails.fullUploadUrl);
-  formData.append('file', file, blobNameForUpload);
-  formData.append('fileLastModified', new Date(file.lastModified).toISOString()); // Add last modified date
+  formData.append("containerSasUrl", containerSasDetails.fullUploadUrl);
+  formData.append("file", file, blobNameForUpload);
+  formData.append(
+    "fileLastModified",
+    new Date(file.lastModified).toISOString()
+  ); // Add last modified date
   if (overwrite) {
-    formData.append('overwrite', 'true'); // Send overwrite flag
+    formData.append("overwrite", "true"); // Send overwrite flag
   }
 
   const uploadViaSasUrl = `${backendApiBaseUrl}/upload-via-sas`;
   const response = await fetch(uploadViaSasUrl, {
-    method: 'POST',
+    method: "POST",
     body: formData,
     headers: getAuthHeaders(true),
   });
 
   if (!response.ok) {
-    return { success: false, ...await response.json() }; // Return failure with details
+    return { success: false, ...(await response.json()) }; // Return failure with details
   }
 
   return { success: true }; // Return success
@@ -87,23 +121,41 @@ export const generateReadSAS = async (
   blobName: string,
   getAuthHeaders: (isFormData?: boolean) => HeadersInit
 ) => {
-  const response = await fetch(`${backendApiBaseUrl}/generate-read-sas?targetContainerName=${encodeURIComponent(containerName)}&blobName=${encodeURIComponent(blobName)}`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${backendApiBaseUrl}/generate-read-sas?targetContainerName=${encodeURIComponent(
+      containerName
+    )}&blobName=${encodeURIComponent(blobName)}`,
+    {
+      headers: getAuthHeaders(),
+    }
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to get download URL: ${response.status} - ${errorText || response.statusText}`);
+    throw new Error(
+      `Failed to get download URL: ${response.status} - ${
+        errorText || response.statusText
+      }`
+    );
   }
 
   return response.json();
 };
 
-export const deleteFile = async (containerName: string, blobName: string, getAuthHeaders: (isFormData?: boolean) => HeadersInit) => {
-  return fetch(`${backendApiBaseUrl}?targetContainerName=${encodeURIComponent(containerName)}&blobName=${encodeURIComponent(blobName)}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
+export const deleteFile = async (
+  containerName: string,
+  blobName: string,
+  getAuthHeaders: (isFormData?: boolean) => HeadersInit
+) => {
+  return fetch(
+    `${backendApiBaseUrl}?targetContainerName=${encodeURIComponent(
+      containerName
+    )}&blobName=${encodeURIComponent(blobName)}`,
+    {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    }
+  );
 };
 
 export const updateMetadata = async (
@@ -112,19 +164,30 @@ export const updateMetadata = async (
   metadata: Record<string, string>,
   getAuthHeaders: (isFormData?: boolean) => HeadersInit
 ) => {
-  const backendApiBaseUrl = import.meta.env.VITE_BACKEND_API_BASE_URL || 'http://localhost:5230/api/files';
-  const response = await fetch(`${backendApiBaseUrl}/${encodeURIComponent(containerName)}/${encodeURIComponent(blobName)}/metadata`, {
-    method: 'PUT',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(metadata)
-  });
+  const backendApiBaseUrl =
+    import.meta.env.VITE_BACKEND_API_BASE_URL ||
+    "http://localhost:5230/api/files";
+  const response = await fetch(
+    `${backendApiBaseUrl}/${encodeURIComponent(
+      containerName
+    )}/${encodeURIComponent(blobName)}/metadata`,
+    {
+      method: "PUT",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(metadata),
+    }
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to update metadata: ${response.status} - ${errorText || response.statusText}`);
+    throw new Error(
+      `Failed to update metadata: ${response.status} - ${
+        errorText || response.statusText
+      }`
+    );
   }
   // No content is expected on success, so we don't need to return response.json()
 };
@@ -134,12 +197,59 @@ export const getMessageFileContent = async (
   blobName: string,
   getAuthHeaders: (isFormData?: boolean) => HeadersInit
 ): Promise<any> => {
-  const response = await fetch(`${backendApiBaseUrl}/message-content?targetContainerName=${encodeURIComponent(containerName)}&blobName=${encodeURIComponent(blobName)}`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${backendApiBaseUrl}/message-content?targetContainerName=${encodeURIComponent(
+      containerName
+    )}&blobName=${encodeURIComponent(blobName)}`,
+    {
+      headers: getAuthHeaders(),
+    }
+  );
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to get message content: ${response.status} - ${errorText || response.statusText}`);
+    throw new Error(
+      `Failed to get message content: ${response.status} - ${
+        errorText || response.statusText
+      }`
+    );
   }
   return response.json();
+};
+
+export const redactPdf = async (
+  containerName: string,
+  blobName: string,
+  redactionCoordinates: RedactionCoordinate[],
+  getAuthHeaders: (isFormData?: boolean) => HeadersInit
+) => {
+  const response = await fetch(
+    `${backendApiBaseUrl}/redact-pdf?targetContainerName=${encodeURIComponent(
+      containerName
+    )}&blobName=${encodeURIComponent(blobName)}`,
+    {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(redactionCoordinates),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to redact PDF: ${response.status} - ${
+        errorText || response.statusText
+      }`
+    );
+  }
+
+  // Check if the response has content before trying to parse as JSON
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return response.json();
+  } else {
+    return {}; // Return an empty object for successful non-JSON responses
+  }
 };

@@ -14,6 +14,11 @@ using MimeKit;
 using System.Text.Json;
 using System.Security.Principal;
 using MsgReader.Outlook;
+using System.IO.Compression;
+using PdfSharp.Pdf;
+using PdfSharp.Drawing;
+using PdfSharp.Pdf.IO;
+using System.IO; // For MemoryStream
 
 namespace MyBlobUploadApi.Controllers
 {
@@ -122,7 +127,7 @@ namespace MyBlobUploadApi.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { Message = "An unexpected error occurred while deleting the file.", Details = ex.Message });
             }
         }
-        
+
         [HttpPost("upload-via-sas")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -305,12 +310,12 @@ namespace MyBlobUploadApi.Controllers
             }
         }
         [HttpGet("list")]
-        [ProducesResponseType(typeof(IEnumerable<MyBlobUploadApi.Models.FileInfo>), StatusCodes.Status200OK)] // Corrected based on previous changes
+        [ProducesResponseType(typeof(PaginatedBlobList), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)] // Added for clarity, though [Authorize] handles it
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]        
-        public async Task<IActionResult> ListFiles([FromQuery] string targetContainerName)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ListFiles([FromQuery] string targetContainerName, [FromQuery] string? folderPath = null, [FromQuery] string? continuationToken = null, [FromQuery] bool listFoldersOnly = false)
         {
             if (string.IsNullOrWhiteSpace(targetContainerName))
             {
@@ -328,29 +333,20 @@ namespace MyBlobUploadApi.Controllers
             var lowerCaseContainerName = targetContainerName.ToLowerInvariant();
 
             try
-            {                
-                // Log user details from the token claims for debugging purposes (moved here after auth check)
-                var user = HttpContext.User; // Re-declare user in this scope
-                var userName = user.Identity?.Name ?? "Unknown"; // Re-declare userName in this scope
-                // The 'oid' or objectidentifier claim holds the user's unique ID
+            {
+                var user = HttpContext.User;
+                var userName = user.Identity?.Name ?? "Unknown";
                 var userObjectId = user.Claims.FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/objectidentifier" || c.Type == "oid")?.Value ?? "N/A";
 
                 _logger.LogInformation("ListFiles request received from User: {UserName}, Object ID: {UserObjectId}", userName, userObjectId);
 
-                // Default page size if not provided
-                int pageSize = 20; // You can make this configurable or accept from query
-                string? continuationToken = HttpContext.Request.Query["continuationToken"].FirstOrDefault();
+                int pageSize = 20;
+                var paginatedResult = await _blobStorageService.ListBlobsAsync(lowerCaseContainerName, pageSize, folderPath, continuationToken, listFoldersOnly);
 
-                var paginatedResult = await _blobStorageService.ListBlobsAsync(lowerCaseContainerName, pageSize, continuationToken);
+                _logger.LogInformation("Successfully listed {Count} files from container {TargetContainerName} with continuation token {ContinuationToken}",
+                    paginatedResult.Items.Count(), lowerCaseContainerName, paginatedResult.NextContinuationToken ?? "N/A");
 
-                _logger.LogInformation("Successfully listed {Count} files from container {TargetContainerName} with continuation token {ContinuationToken}", 
-                                       paginatedResult.Items.Count(), 
-                                       lowerCaseContainerName, 
-                                       paginatedResult.NextContinuationToken ?? "N/A");
-
-                // Return the paginated result directly
                 return Ok(paginatedResult);
-
             }
             catch (Exception ex)
             {
@@ -358,7 +354,7 @@ namespace MyBlobUploadApi.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { Message = "An unexpected error occurred while listing files.", Details = ex.Message });
             }
         }
-        
+
         [HttpGet("generate-read-sas")]
         [ProducesResponseType(typeof(SasDownloadInfo), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -393,7 +389,46 @@ namespace MyBlobUploadApi.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { Message = "An unexpected error occurred while generating the download URL.", Details = ex.Message });
             }
         }
-        
+
+        [HttpPost("processzip")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UploadZipFile([FromQuery] string targetContainerName, [FromForm] string sourceContainerName, [FromForm] string sourceBlobName)
+        {
+            if (string.IsNullOrWhiteSpace(targetContainerName))
+            {
+                return BadRequest(new { Message = "Target container name is required." });
+            }
+
+            if (string.IsNullOrWhiteSpace(sourceContainerName) || string.IsNullOrWhiteSpace(sourceBlobName))
+            {
+                return BadRequest(new { Message = "Source container name and source blob name are required." });
+            }
+
+            // No local file system path validation needed as the source is now Azure Blob Storage
+
+            var lowerCaseTargetContainerName = targetContainerName.ToLowerInvariant();
+            var lowerCaseSourceContainerName = sourceContainerName.ToLowerInvariant();
+
+            try
+            {
+                // Generate a unique DocumentId for the ZIP file itself
+                string docIdPrefix = _configuration["DocumentIdPrefix"] ?? "DOC";
+                int nextDocNumber = await _blobStorageService.GetNextDocumentNumberAsync(lowerCaseTargetContainerName, docIdPrefix);
+                string zipDocumentId = $"{docIdPrefix}.{lowerCaseTargetContainerName}.{nextDocNumber:D4}";
+
+                // Pass source container and blob name to the service layer
+                await _blobStorageService.UploadZipFileAndExtractAsync(lowerCaseTargetContainerName, lowerCaseSourceContainerName, sourceBlobName, zipDocumentId);
+
+                return Ok(new { Message = $"Zip file '{sourceBlobName}' from container '{sourceContainerName}' uploaded and extracted successfully to '{targetContainerName}'.", ZipDocumentId = zipDocumentId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading and extracting zip file {SourceBlobName} from {SourceContainerName} to {TargetContainerName}", sourceBlobName, sourceContainerName, lowerCaseTargetContainerName);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Message = "An unexpected error occurred during zip file upload and extraction.", Details = ex.Message });
+            }
+        }
         [HttpPost("get-SHA256-hash")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -497,7 +532,7 @@ namespace MyBlobUploadApi.Controllers
 
             // Get user's email from the token claims.
             // The 'preferred_username' claim often contains the user's email/UPN.
-            
+
             foreach (var claim in HttpContext.User.Claims)
             {
                 Console.WriteLine($"Type: {claim.Type}, Value: {claim.Value}");
@@ -521,17 +556,17 @@ namespace MyBlobUploadApi.Controllers
             {
                 _logger.LogInformation("GetMatters request received for user: {UserEmail}", userEmail);
             }
-                var dataverseScope = _configuration["Dataverse:Scopes"];
-                var dataverseScopes = new[] { dataverseScope };
-                var accessToken = await _tokenAcquisition.GetAccessTokenForUserAsync(dataverseScopes);
-                // 3. Call the Dataverse API to check for team membership.
-                var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                client.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
-                client.DefaultRequestHeaders.Add("OData-Version", "4.0");
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                
-                var dataverseBaseUrl = _configuration["Dataverse:BaseUrl"];
+            var dataverseScope = _configuration["Dataverse:Scopes"];
+            var dataverseScopes = new[] { dataverseScope };
+            var accessToken = await _tokenAcquisition.GetAccessTokenForUserAsync(dataverseScopes);
+            // 3. Call the Dataverse API to check for team membership.
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            client.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
+            client.DefaultRequestHeaders.Add("OData-Version", "4.0");
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            var dataverseBaseUrl = _configuration["Dataverse:BaseUrl"];
             // TODO: Use userEmail to query Dynamics 365/Dataverse for matters this user can access.
             //api/data/v9.2/fwotrace_matterteammembers?$select=fwotrace_matterteammemberid,fwotrace_name,createdon&$expand=fwotrace_MatterTeamId($select=fwotrace_name;$expand=fwotrace_MatterId($select=fwotrace_mattertitle)),fwotrace_MemberId($select=systemuserid)&$filter=(fwotrace_securityrole eq 230490000) and (fwotrace_MatterTeamId/fwotrace_matterteamid ne null) and (fwotrace_MemberId/internalemailaddress eq %27Ashutosh.Nigam%40fwo.gov.au%27)&$orderby=fwotrace_name asc
             var requestUrl = $"{dataverseBaseUrl}/api/data/v9.2/fwotrace_matterteammembers?$select=fwotrace_matterteammemberid,fwotrace_name,createdon&$expand=fwotrace_MatterTeamId($select=fwotrace_name;$expand=fwotrace_MatterId($select=fwotrace_mattertitle)),fwotrace_MemberId($select=systemuserid)&$filter=(fwotrace_securityrole eq 230490000) and (fwotrace_MatterTeamId/fwotrace_matterteamid ne null) and (fwotrace_MemberId/internalemailaddress eq {userEmail})&$orderby=fwotrace_name asc";
@@ -557,6 +592,7 @@ namespace MyBlobUploadApi.Controllers
 
             return Ok(matters);
         }
+
 
         [HttpGet("message-content")]
         [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
@@ -646,6 +682,169 @@ namespace MyBlobUploadApi.Controllers
 
 
 
+        [HttpPost("redact-pdf")] // Endpoint name as requested
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> RedactPdf(
+            [FromQuery] string targetContainerName,
+            [FromQuery] string blobName,
+            [FromBody] List<RedactionCoordinate> redactionCoordinates)
+        {
+            if (string.IsNullOrWhiteSpace(targetContainerName) || string.IsNullOrWhiteSpace(blobName))
+            {
+                _logger.LogWarning("RedactPdf attempt with missing targetContainerName or blobName.");
+                return BadRequest(new { Message = "Target container name and blob name are required." });
+            }
+
+            if (redactionCoordinates == null || !redactionCoordinates.Any())
+            {
+                _logger.LogWarning("RedactPdf attempt for blob {BlobName} in container {TargetContainerName} with no redaction coordinates.", blobName, targetContainerName);
+                return BadRequest(new { Message = "Redaction coordinates are required." });
+            }
+
+            var lowerCaseContainerName = targetContainerName.ToLowerInvariant();
+
+            try
+            {
+                _logger.LogInformation("Received redaction request for blob {BlobName} in container {TargetContainerName} with {Count} redactions.",
+                    blobName, lowerCaseContainerName, redactionCoordinates.Count);
+                // 1. Generate the new blob name for the redacted file
+                string originalDirectory = Path.GetDirectoryName(blobName);                  
+                string originalFileNameWithoutExtension = Path.GetFileNameWithoutExtension(blobName);
+                string newFileName = $"{originalFileNameWithoutExtension}_redacted.pdf";
+                
+                string newRedactedBlobName;
+                if (!string.IsNullOrEmpty(originalDirectory))
+                {
+                    // Combine the original directory with the new file name
+                    // and ensure forward slashes for blob paths
+                    newRedactedBlobName = Path.Combine(originalDirectory, newFileName).Replace("\\", "/");
+                }
+                else
+                {
+                    // If no directory, just use the new file name
+                    newRedactedBlobName = newFileName;
+                }
+                // 2. Get the original file's metadata to extract its DocumentId
+                var originalMetadata = await _blobStorageService.GetBlobMetadataAsync(lowerCaseContainerName, blobName);
+                string originalDocumentId = null;
+                if (originalMetadata != null)
+                {
+                    // Use LINQ to find the key case-insensitively
+                    var documentIdEntry = originalMetadata.FirstOrDefault(m =>
+                        m.Key.Equals("DocumentId", StringComparison.OrdinalIgnoreCase));
+
+                    if (documentIdEntry.Key != null) // Check if an entry was found
+                    {
+                        originalDocumentId = documentIdEntry.Value;
+                    }
+                }
+                if (string.IsNullOrEmpty(originalDocumentId))
+                {
+                    _logger.LogWarning("Original DocumentId not found for blob {BlobName} in container {TargetContainerName}. ParentId will not be set.", blobName, lowerCaseContainerName);
+                }
+                _logger.LogInformation("Original DocumentId retrieved for {BlobName}: {OriginalDocumentId}", blobName, originalDocumentId ?? "N/A");
+
+                // 1. Download the original PDF blob
+                using (Stream originalPdfStream = await _blobStorageService.DownloadBlobAsync(lowerCaseContainerName, blobName))
+                {
+                    if (originalPdfStream == null)
+                    {
+                        _logger.LogWarning("Blob {BlobName} not found in container {TargetContainerName} for redaction.", blobName, lowerCaseContainerName);
+                        return NotFound(new { Message = $"Blob '{blobName}' not found in container '{lowerCaseContainerName}'." });
+                    }
+
+                    PdfDocument document;
+                    try
+                    {
+                        // 2. Load PDF into PdfSharp document for modification
+                        document = PdfReader.Open(originalPdfStream, PdfDocumentOpenMode.Modify);
+                    }
+                    catch (Exception pdfEx)
+                    {
+                        _logger.LogError(pdfEx, "Error opening PDF for redaction: {BlobName} in {TargetContainerName}", blobName, lowerCaseContainerName);
+                        return BadRequest(new { Message = "Failed to open PDF. It might be corrupted or not a valid PDF.", Details = pdfEx.Message });
+                    }
+
+                    var redactionsByPage = redactionCoordinates
+                        .GroupBy(r => r.Page)
+                        .OrderBy(g => g.Key); // Process pages in order
+
+                    foreach (var pageGroup in redactionsByPage)
+                    {
+                        int pageNumber = pageGroup.Key;
+                        if (pageNumber <= 0 || pageNumber > document.PageCount)
+                        {
+                            _logger.LogWarning("Invalid page number {PageNumber} for redaction in blob {BlobName}. Skipping redactions for this page.", pageNumber, blobName);
+                            continue; // Skip invalid pages
+                        }
+
+                        PdfPage page = document.Pages[pageNumber - 1]; // PdfSharp pages are 0-indexed
+
+                        // Create XGraphics object once per page and ensure it's disposed
+                        using (XGraphics gfx = XGraphics.FromPdfPage(page))
+                        {
+                            foreach (var redaction in pageGroup)
+                            {
+                                XRect rect = new XRect(redaction.X, redaction.Y, redaction.Width, redaction.Height);
+                                gfx.DrawRectangle(XBrushes.Black, rect);
+                            }
+                        } // XGraphics object is disposed here
+                    }
+
+                    // 4. Save the modified PDF to a MemoryStream
+                    using (MemoryStream redactedPdfStream = new MemoryStream())
+                    {
+                        document.Save(redactedPdfStream);
+                        redactedPdfStream.Position = 0; // Reset stream position for uploading
+
+                        // 5. Upload the redacted PDF back to Azure Blob Storage (overwriting the original)
+                        // Assuming _blobStorageService.UploadBlobAsync takes container, blobName, stream, and content type
+                        await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, newRedactedBlobName, redactedPdfStream, true);
+                        //// Old: await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, blobName, redactedPdfStream, "application/pdf");
+                        //await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, blobName, redactedPdfStream, true, "application/pdf");
+
+                    }
+                }
+
+// 8. Prepare and update metadata for the newly uploaded redacted file
+                var newRedactedFileMetadata = new Dictionary<string, string>();
+
+                // Generate a new DocumentId for the redacted file
+                string docIdPrefix = _configuration["DocumentIdPrefix"] ?? "DOC";
+                int nextDocNumber = await _blobStorageService.GetNextDocumentNumberAsync(lowerCaseContainerName, docIdPrefix);
+                string newDocumentId = $"{docIdPrefix}.{lowerCaseContainerName}.{nextDocNumber:D4}";
+                newRedactedFileMetadata["DocumentId"] = newDocumentId;
+
+                // Set ParentId to the original file's DocumentId
+                if (!string.IsNullOrEmpty(originalDocumentId))
+                {
+                    newRedactedFileMetadata["ParentId"] = originalDocumentId;
+                }
+
+                // Add audit metadata for the new redacted file
+                var userName = HttpContext.User.Identity?.Name ?? "Unknown";
+                var now = DateTime.UtcNow.ToString("o");
+                newRedactedFileMetadata["createdDate"] = now; // Redacted file is "created" now
+                newRedactedFileMetadata["createdBy"] = userName;
+                newRedactedFileMetadata["modifiedDate"] = now;
+                newRedactedFileMetadata["modifiedBy"] = userName;
+
+                // Update the metadata for the newly uploaded redacted blob
+                await _blobStorageService.UpdateBlobMetadataAsync(lowerCaseContainerName, newRedactedBlobName, newRedactedFileMetadata);
+
+
+                _logger.LogInformation("Successfully redacted blob {BlobName} in container {TargetContainerName} and saved as {NewRedactedBlobName}.", blobName, lowerCaseContainerName, newRedactedBlobName);
+                return Ok(new { Message = $"PDF redacted successfully and saved as '{newRedactedBlobName}'.", RedactedFileName = newRedactedBlobName });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing redaction for blob {BlobName} in container {TargetContainerName}", blobName, lowerCaseContainerName);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Message = "An unexpected error occurred during PDF redaction.", Details = ex.Message });
+            }
+        }
 
 
 

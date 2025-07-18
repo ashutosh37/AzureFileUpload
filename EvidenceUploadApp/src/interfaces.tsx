@@ -1,3 +1,11 @@
+export interface RedactionCoordinate {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  pageNumber: number;
+}
+
 export interface SasUploadInfo {
   // blobUri: string; // Not used directly
   sharedAccessSignature: string;
@@ -10,6 +18,9 @@ export interface BackendFileInfo {
   checksum: string;
   documentId?: string;
   metadata?: Record<string, string>;
+  parentId?: string; // New property to link child items to their parent
+
+  isFolder?: boolean; // New property from backend
 }
 
 // This interface represents items displayed in the grid (can be a folder or a file)
@@ -21,13 +32,20 @@ export interface DisplayItem {
   checksum: string; // Checksum for files, "N/A" or empty for folders
   documentId?: string;
   metadata?: Record<string, string>;
+  parentId?: string; // Added for hierarchical display
 }
 
 // New state to manage files with their current processing status
 export interface FileToProcess {
   file: File;
   overwrite: boolean; // Flag to indicate if this file should overwrite existing
-  status: 'pending' | 'uploading' | 'success' | 'error' | 'conflict' | 'skipped';
+  status:
+    | "pending"
+    | "uploading"
+    | "success"
+    | "error"
+    | "conflict"
+    | "skipped";
   errorMessage?: string;
 }
 
@@ -37,7 +55,15 @@ export interface FileUploadFormProps {
   initialFolderPath?: string;
 }
 
-export interface Metadata {
-  value: string;
-  index: number;
+export interface FileToProcess {
+  file: File;
+  overwrite: boolean;
+  status:
+    | "pending"
+    | "uploading"
+    | "success"
+    | "error"
+    | "skipped"
+    | "conflict";
+  errorMessage?: string;
 }
