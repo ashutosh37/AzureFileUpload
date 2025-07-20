@@ -42,7 +42,8 @@ function FileUploadForm({
   const [destinationPath, setDestinationPath] = useState<string>(""); // Path for the new upload
 
   const [isRedactionDialogOpen, setIsRedactionDialogOpen] = useState(false);
-  const [selectedFileForRedaction, setSelectedFileForRedaction] = useState<DisplayItem | null>(null);
+  const [selectedFileForRedaction, setSelectedFileForRedaction] =
+    useState<DisplayItem | null>(null);
   const [pdfRedactionUrl, setPdfRedactionUrl] = useState<string | null>(null);
 
   // useEffect for acquiring an access token for the backend API
@@ -248,6 +249,8 @@ function FileUploadForm({
     matters.find((m) => m.id === displayedContainerForFiles)?.name ||
     displayedContainerForFiles;
 
+  const showContent = !!displayedContainerForFiles && !!currentPath;
+
   // Effect to set initial container name from props
   useEffect(() => {
     if (initialContainerName) {
@@ -289,12 +292,16 @@ function FileUploadForm({
     );
 
     if (!selectedFile || !displayedContainerForFiles || !accessToken) {
-      setUploadError("Cannot redact: file, container, or access token missing.");
+      setUploadError(
+        "Cannot redact: file, container, or access token missing."
+      );
       return;
     }
 
     try {
-      setUploadStatus(`Generating secure URL for ${selectedFile.displayName}...`);
+      setUploadStatus(
+        `Generating secure URL for ${selectedFile.displayName}...`
+      );
       setUploadError("");
       const sasData = await apiService.generateReadSAS(
         displayedContainerForFiles,
@@ -323,13 +330,21 @@ function FileUploadForm({
   };
 
   const handleSaveRedaction = async (redactionCoordinates: any[]) => {
-    if (!selectedFileForRedaction || !displayedContainerForFiles || !accessToken) {
-      setUploadError("Cannot save redaction: file, container, or access token missing.");
+    if (
+      !selectedFileForRedaction ||
+      !displayedContainerForFiles ||
+      !accessToken
+    ) {
+      setUploadError(
+        "Cannot save redaction: file, container, or access token missing."
+      );
       return;
     }
 
     try {
-      setUploadStatus(`Applying redactions to ${selectedFileForRedaction.displayName}...`);
+      setUploadStatus(
+        `Applying redactions to ${selectedFileForRedaction.displayName}...`
+      );
       setUploadError("");
 
       // Call the backend API to apply redactions with coordinates
@@ -340,7 +355,9 @@ function FileUploadForm({
         getAuthHeaders // Pass the function itself
       );
 
-      setUploadStatus(`"${selectedFileForRedaction.displayName}" redacted successfully.`);
+      setUploadStatus(
+        `"${selectedFileForRedaction.displayName}" redacted successfully.`
+      );
       handleCloseRedactionDialog(); // Close dialog and refresh list
     } catch (error) {
       console.error("Error applying redactions:", error);
@@ -547,15 +564,15 @@ function FileUploadForm({
               </svg>
             </div>
 
-      {isRedactionDialogOpen && (
-        <PdfRedactorDialog
-          isOpen={isRedactionDialogOpen}
-          onClose={handleCloseRedactionDialog}
-          onSave={handleSaveRedaction}
-          pdfFile={selectedFileForRedaction}
-          pdfUrl={pdfRedactionUrl}
-        />
-      )}
+            {isRedactionDialogOpen && (
+              <PdfRedactorDialog
+                isOpen={isRedactionDialogOpen}
+                onClose={handleCloseRedactionDialog}
+                onSave={handleSaveRedaction}
+                pdfFile={selectedFileForRedaction}
+                pdfUrl={pdfRedactionUrl}
+              />
+            )}
           </div>
 
           {/* Root Folder Selection (Conditional rendering) */}
@@ -586,9 +603,8 @@ function FileUploadForm({
           )}
         </div>
       )}
-
       {/* Upload Pane - now sits between container selection and file list */}
-      {displayedContainerForFiles && (
+      {showContent && (
         <UploadPane
           destinationPath={destinationPath}
           onDestinationPathChange={(e) => setDestinationPath(e.target.value)}
@@ -605,200 +621,200 @@ function FileUploadForm({
           isContainerSelected={!!displayedContainerForFiles}
         />
       )}
-
       {/* Main Content Area: File List & Properties */}
-
-      {/* Main Content Area: File List & Properties */}
-      <div className="flex flex-col lg:flex-row">
-        {/* Left Panel: File List */}
-        <div className="flex-grow bg-white p-8 shadow-2xl flex flex-col min-w-0">
-          <div className="flex justify-between items-center mb-4 min-h-[28px]">
-            {" "}
-            {/* Adjusted min-h */}
-            <div className="flex items-center text-sm text-gray-600 flex-grow truncate">
-              {displayedContainerForFiles ? (
-                <div className="flex items-center flex-shrink-0">
-                  {initialContainerName ? (
-                    <span className="flex items-center text-gray-700">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 mr-1.5"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                      </svg>
-                      <span className="font-medium">
-                        {displayedContainerForFiles}
+      {showContent && (
+        <div className="flex flex-col lg:flex-row">
+          {/* Left Panel: File List */}
+          <div className="flex-grow bg-white p-8 shadow-2xl flex flex-col min-w-0">
+            <div className="flex justify-between items-center mb-4 min-h-[28px]">
+              {" "}
+              {/* Adjusted min-h */}
+              <div className="flex items-center text-sm text-gray-600 flex-grow truncate">
+                {displayedContainerForFiles ? (
+                  <div className="flex items-center flex-shrink-0">
+                    {initialContainerName ? (
+                      <span className="flex items-center text-gray-700">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4 mr-1.5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                        </svg>
+                        <span className="font-medium">
+                          {displayedContainerForFiles}
+                        </span>
                       </span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center text-gray-700">
-                      <span className="font-medium">
-                        {displayedContainerForFiles}
+                    ) : (
+                      <span className="flex items-center text-gray-700">
+                        <span className="font-medium">
+                          {displayedContainerForFiles}
+                        </span>
                       </span>
-                    </span>
-                  )}
-                  <Breadcrumbs
-                    currentPath={currentPath}
-                    handleBreadcrumbClick={handleBreadcrumbClick}
-                  />
+                    )}
+                    <Breadcrumbs
+                      currentPath={currentPath}
+                      handleBreadcrumbClick={handleBreadcrumbClick}
+                    />
+                    <button
+                      onClick={handleRefresh}
+                      className="flex items-center p-2 focus:outline-none"
+                      title="Refresh Files"
+                    >
+                      <RefreshIcon />
+                    </button>
+                  </div>
+                ) : (
+                  <h3 className="text-xl font-semibold text-gray-700">
+                    Files in Container
+                  </h3>
+                )}
+              </div>
+              {/* Action Bar: Create Folder and Bulk Delete - Moved to top right */}
+              {displayedContainerForFiles && (
+                <div className="flex items-center space-x-2 ml-auto flex-wrap justify-end">
                   <button
-                    onClick={handleRefresh}
-                    className="ml-2 p-1 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    title="Refresh Files"
+                    onClick={handleBulkDelete}
+                    disabled={selectedFiles.length === 0}
+                    className={`px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-md hover:bg-red-700 ${
+                      selectedFiles.length === 0
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                    }`}
                   >
-                    <RefreshIcon />
+                    Delete Selected ({selectedFiles.length})
+                  </button>
+                  <button
+                    onClick={handleRedactClick}
+                    disabled={isRedactDisabled}
+                    className={`px-4 py-2 text-sm font-bold text-white bg-purple-600 rounded-md hover:bg-purple-700 ${
+                      isRedactDisabled ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                    title={
+                      isRedactDisabled
+                        ? "Select a single PDF file to redact"
+                        : "Redact selected PDF"
+                    }
+                  >
+                    Redact PDF
+                  </button>
+                  <button
+                    onClick={handleProcessClick}
+                    disabled={isProcessDisabled}
+                    className={`px-4 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700 ${
+                      isProcessDisabled ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                    title={
+                      isProcessDisabled
+                        ? "Select one or more non-PDF files to process"
+                        : "Process selected documents"
+                    }
+                  >
+                    Convert to PDF
+                  </button>
+                  <button
+                    onClick={handleSendToSharePointClick}
+                    disabled={isSendToSharePointDisabled}
+                    className={`px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700 ${
+                      isSendToSharePointDisabled
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                    }`}
+                    title={
+                      isSendToSharePointDisabled
+                        ? "Select one or more files to send"
+                        : "Send selected files to SharePoint"
+                    }
+                  >
+                    Send To SharePoint
                   </button>
                 </div>
-              ) : (
-                <h3 className="text-xl font-semibold text-gray-700">
-                  Files in Container
-                </h3>
               )}
             </div>
-            {/* Action Bar: Create Folder and Bulk Delete - Moved to top right */}
-            {displayedContainerForFiles && (
-              <div className="flex items-center space-x-2 ml-auto flex-wrap justify-end">
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={selectedFiles.length === 0}
-                  className={`px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-md hover:bg-red-700 ${
-                    selectedFiles.length === 0
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
-                >
-                  Delete Selected ({selectedFiles.length})
-                </button>
-                <button
-                  onClick={handleRedactClick}
-                  disabled={isRedactDisabled}
-                  className={`px-4 py-2 text-sm font-bold text-white bg-purple-600 rounded-md hover:bg-purple-700 ${
-                    isRedactDisabled ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
-                  title={
-                    isRedactDisabled
-                      ? "Select a single PDF file to redact"
-                      : "Redact selected PDF"
-                  }
-                >
-                  Redact PDF
-                </button>
-                <button
-                  onClick={handleProcessClick}
-                  disabled={isProcessDisabled}
-                  className={`px-4 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700 ${
-                    isProcessDisabled ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
-                  title={
-                    isProcessDisabled
-                      ? "Select one or more non-PDF files to process"
-                      : "Process selected documents"
-                  }
-                >
-                  Process Documents
-                </button>
-                <button
-                  onClick={handleSendToSharePointClick}
-                  disabled={isSendToSharePointDisabled}
-                  className={`px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700 ${
-                    isSendToSharePointDisabled
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
-                  title={
-                    isSendToSharePointDisabled
-                      ? "Select one or more files to send"
-                      : "Send selected files to SharePoint"
-                  }
-                >
-                  Send To SharePoint
-                </button>
-              </div>
-            )}
-          </div>
 
-          {isLoadingFiles ? (
-            <div className="flex-grow flex justify-center items-center">
-              <svg
-                className="animate-spin h-8 w-8 text-blue-600"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              <p className="ml-2 text-gray-600">Loading...</p>
-            </div>
-          ) : displayedContainerForFiles ? (
-            currentPath ? (
-              <FileListing
-                displayedItems={displayedItems}
-                sortColumn={sortColumn}
-                sortDirection={sortDirection}
-                handleSort={handleSort}
-                selectedItem={selectedItem}
-                setSelectedItem={setSelectedItem}
-                handleItemAction={handleItemAction}
-                handleDeleteClick={handleDeleteClick}
-                selectedFiles={selectedFiles}
-                handleCheckboxChange={handleCheckboxChange}
-                handleSelectAll={handleSelectAll}
-              />
+            {isLoadingFiles ? (
+              <div className="flex-grow flex justify-center items-center">
+                <svg
+                  className="animate-spin h-8 w-8 text-blue-600"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                <p className="ml-2 text-gray-600">Loading...</p>
+              </div>
+            ) : displayedContainerForFiles ? (
+              currentPath ? (
+                <FileListing
+                  displayedItems={displayedItems}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  handleSort={handleSort}
+                  selectedItem={selectedItem}
+                  setSelectedItem={setSelectedItem}
+                  handleItemAction={handleItemAction}
+                  handleDeleteClick={handleDeleteClick}
+                  selectedFiles={selectedFiles}
+                  handleCheckboxChange={handleCheckboxChange}
+                  handleSelectAll={handleSelectAll}
+                />
+              ) : (
+                <div className="flex-grow flex justify-center items-center">
+                  <p className="text-gray-600">
+                    No items found in '{currentMatterName}
+                    {currentPath ? `/${currentPath}` : ""}'.
+                  </p>
+                </div>
+              )
             ) : (
               <div className="flex-grow flex justify-center items-center">
                 <p className="text-gray-600">
-                  No items found in '{currentMatterName}
-                  {currentPath ? `/${currentPath}` : ""}'.
+                  Enter a container name and click "View/Refresh Files" to list
+                  files.
                 </p>
               </div>
-            )
-          ) : (
-            <div className="flex-grow flex justify-center items-center">
-              <p className="text-gray-600">
-                Enter a container name and click "View/Refresh Files" to list
-                files.
-              </p>
-            </div>
-          )}
-          {/* Pagination Controls */}
-          <Pagination
-            displayedContainerForFiles={displayedContainerForFiles}
-            displayedItemsCount={displayedItems.length}
-            prevPageTokens={prevPageTokens}
-            nextPageToken={nextPageToken}
-            isLoadingFiles={isLoadingFiles}
-            handlePreviousPage={handlePreviousPage}
-            handleNextPage={handleNextPage}
-          />
-        </div>
-
-        {/* Right Panel: Properties */}
-        <div className="lg:w-[32rem] flex-shrink-0">
-          {displayedContainerForFiles && (
-            <PropertiesPane
-              item={selectedItem}
-              containerName={displayedContainerForFiles}
-              onRefresh={refreshFilesAndSelection}
-              accessToken={accessToken}
-              getAuthHeaders={getAuthHeaders}
+            )}
+            {/* Pagination Controls */}
+            <Pagination
+              displayedContainerForFiles={displayedContainerForFiles}
+              displayedItemsCount={displayedItems.length}
+              prevPageTokens={prevPageTokens}
+              nextPageToken={nextPageToken}
+              isLoadingFiles={isLoadingFiles}
+              handlePreviousPage={handlePreviousPage}
+              handleNextPage={handleNextPage}
             />
-          )}
+          </div>
+
+          {/* Right Panel: Properties */}
+          <div className="lg:w-[32rem] flex-shrink-0">
+            {displayedContainerForFiles && (
+              <PropertiesPane
+                item={selectedItem}
+                containerName={displayedContainerForFiles}
+                onRefresh={refreshFilesAndSelection}
+                accessToken={accessToken}
+                getAuthHeaders={getAuthHeaders}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      )}
+      ;
     </div>
   );
 }

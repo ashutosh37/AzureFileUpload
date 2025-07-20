@@ -711,10 +711,10 @@ namespace MyBlobUploadApi.Controllers
                 _logger.LogInformation("Received redaction request for blob {BlobName} in container {TargetContainerName} with {Count} redactions.",
                     blobName, lowerCaseContainerName, redactionCoordinates.Count);
                 // 1. Generate the new blob name for the redacted file
-                string originalDirectory = Path.GetDirectoryName(blobName);                  
+                string originalDirectory = Path.GetDirectoryName(blobName);
                 string originalFileNameWithoutExtension = Path.GetFileNameWithoutExtension(blobName);
                 string newFileName = $"{originalFileNameWithoutExtension}_redacted.pdf";
-                
+
                 string newRedactedBlobName;
                 if (!string.IsNullOrEmpty(originalDirectory))
                 {
@@ -771,7 +771,7 @@ namespace MyBlobUploadApi.Controllers
                     var redactionsByPage = redactionCoordinates
                         .GroupBy(r => r.Page)
                         .OrderBy(g => g.Key); // Process pages in order
-
+                    const double frontendScale = 1.5;
                     foreach (var pageGroup in redactionsByPage)
                     {
                         int pageNumber = pageGroup.Key;
@@ -788,7 +788,12 @@ namespace MyBlobUploadApi.Controllers
                         {
                             foreach (var redaction in pageGroup)
                             {
-                                XRect rect = new XRect(redaction.X, redaction.Y, redaction.Width, redaction.Height);
+                                XRect rect = new XRect(
+                            redaction.X / frontendScale,
+                            redaction.Y / frontendScale,
+                            redaction.Width / frontendScale,
+                            redaction.Height / frontendScale
+                        );
                                 gfx.DrawRectangle(XBrushes.Black, rect);
                             }
                         } // XGraphics object is disposed here
@@ -802,14 +807,12 @@ namespace MyBlobUploadApi.Controllers
 
                         // 5. Upload the redacted PDF back to Azure Blob Storage (overwriting the original)
                         // Assuming _blobStorageService.UploadBlobAsync takes container, blobName, stream, and content type
-                        await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, newRedactedBlobName, redactedPdfStream, true);
-                        //// Old: await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, blobName, redactedPdfStream, "application/pdf");
-                        //await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, blobName, redactedPdfStream, true, "application/pdf");
+                        await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, newRedactedBlobName, redactedPdfStream, true , "application/pdf");
 
                     }
                 }
 
-// 8. Prepare and update metadata for the newly uploaded redacted file
+                // 8. Prepare and update metadata for the newly uploaded redacted file
                 var newRedactedFileMetadata = new Dictionary<string, string>();
 
                 // Generate a new DocumentId for the redacted file

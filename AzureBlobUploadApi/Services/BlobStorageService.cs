@@ -617,7 +617,7 @@ namespace MyBlobUploadApi.Services
 
             return null;
         }
-        public async Task UploadBlobAsync(string containerName, string blobName, Stream content, bool overwrite)
+        public async Task UploadBlobAsync(string containerName, string blobName, Stream content, bool overwrite, string contentType = null)
         {
             try
             {
@@ -636,8 +636,12 @@ namespace MyBlobUploadApi.Services
                     _logger.LogWarning("Blob '{BlobName}' already exists in container '{ContainerName}' and overwrite is false.", blobName, containerName);
                     return;
                 }
-
-                await blobClient.UploadAsync(content, overwrite);
+                var uploadOptions = new BlobUploadOptions();
+                if (contentType != null)
+                {
+                    uploadOptions.HttpHeaders = new BlobHttpHeaders { ContentType = contentType };
+                }
+                await blobClient.UploadAsync(content, uploadOptions);
             }
             catch (Exception ex)
             {

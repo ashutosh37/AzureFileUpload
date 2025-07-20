@@ -98,7 +98,7 @@ export const DeleteIcon = () => (
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 20 20"
     fill="currentColor"
-    className="w-5 h-5 text-red-600 hover:text-red-800"
+    className="w-5 h-5 text-red-600 hover:text-red-800 focus:outline-none"
   >
     <path
       fillRule="evenodd"
@@ -113,8 +113,8 @@ export const RefreshIcon = () => (
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="currentColor"
-    className="w-5 h-5 text-gray-700 mr-2 flex-shrink-0 transition-transform duration-300 hover:rotate-180"
+    className="w-5 h-5 text-gray-700 mr-2 flex-shrink-0 transition-transform duration-300 hover:rotate-180 focus:outline-none"
   >
-    <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
   </svg>
 );
