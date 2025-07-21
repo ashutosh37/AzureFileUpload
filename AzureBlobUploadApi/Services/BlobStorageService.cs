@@ -14,6 +14,7 @@ using System.IO.Compression; // Added for zip file handling
 using System.Security.Cryptography; // Added for SHA256 hash calculation
 using Azure.Storage.Blobs.Specialized;
 
+
 namespace MyBlobUploadApi.Services
 {
     public class BlobStorageService
@@ -135,7 +136,15 @@ namespace MyBlobUploadApi.Services
                                     { "modifiedDate", DateTime.UtcNow.ToString("o") }
                                 };
 
-                                await unzippedBlobClient.UploadAsync(fileMemoryStream, overwrite: true);
+                                string fileExtension = Path.GetExtension(entry.FullName).ToLowerInvariant();
+                                string contentType = GetContentType(fileExtension);
+
+                                var uploadOptions = new BlobUploadOptions();
+                                if (contentType != null)
+                                {
+                                    uploadOptions.HttpHeaders = new BlobHttpHeaders { ContentType = contentType };
+                                }
+                                await unzippedBlobClient.UploadAsync(fileMemoryStream, uploadOptions);
                                 await unzippedBlobClient.SetMetadataAsync(unzippedMetadata);
                                 _logger.LogInformation("Extracted file {UnzippedBlobName} uploaded with ParentId {ParentId}.", unzippedBlobName, zipDocumentId);
                             }
@@ -648,6 +657,31 @@ namespace MyBlobUploadApi.Services
                 _logger.LogError(ex, "Error uploading blob {BlobName} to container {ContainerName}", blobName, containerName);
                 throw; // Rethrow to allow the caller to handle it.
             }
+        }
+
+        private string GetContentType(string fileExtension)
+        {
+            return fileExtension switch
+            {
+                ".pdf" => "application/pdf",
+                ".jpg" => "image/jpeg",
+                ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".txt" => "text/plain",
+                ".html" => "text/html",
+                ".htm" => "text/html",
+                ".doc" => "application/msword",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xls" => "application/vnd.ms-excel",
+                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".ppt" => "application/vnd.ms-powerpoint",
+                ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ".zip" => "application/zip",
+                ".eml" => "message/rfc822",
+                ".msg" => "application/vnd.ms-outlook",
+                _ => "application/octet-stream", // Default to generic binary
+            };
         }
     }
 }

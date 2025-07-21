@@ -51,7 +51,6 @@
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/System.Security.Cryptography.ProtectedData.dll
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/System.Security.Cryptography.Xml.dll
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/System.Text.Json.dll
-/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/runtimes/win/lib/netstandard2.0/System.Security.Cryptography.ProtectedData.dll
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/obj/Debug/net8.0/AzureBlobUploadApi.csproj.AssemblyReference.cache
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/obj/Debug/net8.0/AzureBlobUploadApi.GeneratedMSBuildEditorConfig.editorconfig
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/obj/Debug/net8.0/AzureBlobUploadApi.AssemblyInfoInputs.cache
@@ -106,3 +105,14 @@
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.System.dll
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.WPFonts.dll
 /Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/PdfSharp.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/Aspose.PDF.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/Microsoft.Extensions.DependencyModel.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/Microsoft.Win32.SystemEvents.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/System.Configuration.ConfigurationManager.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/System.Diagnostics.PerformanceCounter.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/System.Drawing.Common.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/System.Security.Permissions.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/System.Windows.Extensions.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/runtimes/win/lib/net8.0/Microsoft.Win32.SystemEvents.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/runtimes/win/lib/net8.0/System.Diagnostics.PerformanceCounter.dll
+/Users/ashutoshnigam/AzureStorageUpload/AzureBlobUploadApi/bin/Debug/net8.0/runtimes/win/lib/net8.0/System.Windows.Extensions.dll

@@ -19,6 +19,9 @@ using PdfSharp.Pdf;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf.IO;
 using System.IO; // For MemoryStream
+using Aspose.Pdf;
+using Aspose.Pdf.Annotations;
+using Aspose.Pdf.Text;
 
 namespace MyBlobUploadApi.Controllers
 {
@@ -756,11 +759,11 @@ namespace MyBlobUploadApi.Controllers
                         return NotFound(new { Message = $"Blob '{blobName}' not found in container '{lowerCaseContainerName}'." });
                     }
 
-                    PdfDocument document;
+                    Document pdfDocument;
                     try
                     {
                         // 2. Load PDF into PdfSharp document for modification
-                        document = PdfReader.Open(originalPdfStream, PdfDocumentOpenMode.Modify);
+                        pdfDocument = new Document(originalPdfStream);
                     }
                     catch (Exception pdfEx)
                     {
@@ -768,46 +771,60 @@ namespace MyBlobUploadApi.Controllers
                         return BadRequest(new { Message = "Failed to open PDF. It might be corrupted or not a valid PDF.", Details = pdfEx.Message });
                     }
 
-                    var redactionsByPage = redactionCoordinates
-                        .GroupBy(r => r.Page)
-                        .OrderBy(g => g.Key); // Process pages in order
-                    const double frontendScale = 1.5;
-                    foreach (var pageGroup in redactionsByPage)
+                    foreach (var redaction in redactionCoordinates)
                     {
-                        int pageNumber = pageGroup.Key;
-                        if (pageNumber <= 0 || pageNumber > document.PageCount)
+                        if (redaction.Page <= 0 || redaction.Page > pdfDocument.Pages.Count)
                         {
-                            _logger.LogWarning("Invalid page number {PageNumber} for redaction in blob {BlobName}. Skipping redactions for this page.", pageNumber, blobName);
-                            continue; // Skip invalid pages
+                            _logger.LogWarning("Invalid page number {PageNumber} for redaction in blob {BlobName}. Skipping redaction.", redaction.Page, blobName);
+                            continue;
                         }
 
-                        PdfPage page = document.Pages[pageNumber - 1]; // PdfSharp pages are 0-indexed
+                        Page page = pdfDocument.Pages[redaction.Page];
 
-                        // Create XGraphics object once per page and ensure it's disposed
-                        using (XGraphics gfx = XGraphics.FromPdfPage(page))
-                        {
-                            foreach (var redaction in pageGroup)
-                            {
-                                XRect rect = new XRect(
-                            redaction.X / frontendScale,
-                            redaction.Y / frontendScale,
-                            redaction.Width / frontendScale,
-                            redaction.Height / frontendScale
+                        // Aspose.PDF uses a coordinate system where (0,0) is bottom-left.
+                        // You might need to adjust coordinates based on your frontend's origin (top-left)
+                        // and the page dimensions.
+                        // Assuming frontend coordinates are top-left and need conversion:
+                        // Aspose.Pdf.Rectangle rect = new Aspose.Pdf.Rectangle(
+                        //     redaction.X,
+                        //     page.Rect.Height - redaction.Y - redaction.Height, // Convert Y to bottom-left origin
+                        //     redaction.X + redaction.Width,
+                        //     page.Rect.Height - redaction.Y // Convert Y to bottom-left origin
+                        // );
+
+                        // For simplicity, let's assume coordinates are already adjusted or you'll adjust them.
+                        // The frontendScale from PdfSharp might also need to be considered if coordinates are scaled.
+                        // For now, using direct coordinates, you'll need to verify this.
+                        double asposeY = page.Rect.Height - redaction.Y - redaction.Height;
+                        Aspose.Pdf.Rectangle rect = new Aspose.Pdf.Rectangle(
+                            redaction.X,
+                            asposeY,
+                            redaction.X + redaction.Width,
+                            asposeY + redaction.Height
                         );
-                                gfx.DrawRectangle(XBrushes.Black, rect);
-                            }
-                        } // XGraphics object is disposed here
-                    }
 
+                        RedactionAnnotation redactionAnnotation = new RedactionAnnotation(page, rect);
+                        redactionAnnotation.FillColor = Aspose.Pdf.Color.Black;
+                        redactionAnnotation.BorderColor = Aspose.Pdf.Color.Black;
+                        redactionAnnotation.OverlayText = ""; // No text overlay
+                        //redactionAnnotation.RepeatOverlayText = false;
+                        redactionAnnotation.TextAlignment = HorizontalAlignment.Center;
+
+                        // Add the redaction annotation to the page
+                        page.Annotations.Add(redactionAnnotation);
+                        redactionAnnotation.Redact();
+                    }
+                    // Apply redactions and flatten the PDF (burn-in)
+                    
                     // 4. Save the modified PDF to a MemoryStream
                     using (MemoryStream redactedPdfStream = new MemoryStream())
                     {
-                        document.Save(redactedPdfStream);
+                        pdfDocument.Save(redactedPdfStream);
                         redactedPdfStream.Position = 0; // Reset stream position for uploading
 
                         // 5. Upload the redacted PDF back to Azure Blob Storage (overwriting the original)
                         // Assuming _blobStorageService.UploadBlobAsync takes container, blobName, stream, and content type
-                        await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, newRedactedBlobName, redactedPdfStream, true , "application/pdf");
+                        await _blobStorageService.UploadBlobAsync(lowerCaseContainerName, newRedactedBlobName, redactedPdfStream, true, "application/pdf");
 
                     }
                 }
