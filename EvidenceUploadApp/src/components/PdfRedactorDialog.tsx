@@ -1,3 +1,4 @@
+// File: EvidenceUploadApp/src/components/PdfRedactorDialog.tsx
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import type { DisplayItem } from "../../src/interfaces";
 import * as pdfjsLib from "pdfjs-dist";
@@ -154,21 +155,40 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
     renderPage();
   }, [renderPage]);
 
+// File: EvidenceUploadApp/src/components/PdfRedactorDialog.tsx
+
+// ... (existing imports and code) ...
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
     setIsDrawing(true);
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+
+    // Calculate scaling factors
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    // Adjust mouse coordinates by the scaling factor
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
     setStartPoint({ x, y });
     setCurrentRect({ x, y, width: 0, height: 0 });
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !startPoint || !canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+
+    // Calculate scaling factors
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    // Adjust mouse coordinates by the scaling factor
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     const newX = Math.min(x, startPoint.x);
     const newY = Math.min(y, startPoint.y);
@@ -203,7 +223,7 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center items-center">
-      <div className="bg-white p-4 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white p-4 rounded-lg shadow-xl max-w-xl w-full max-h-[90vh] flex flex-col">
         <h2 className="text-xl font-bold mb-4">
           Redact PDF: {pdfFile?.displayName}
         </h2>
@@ -232,10 +252,12 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
               Next Page
             </button>
           </div>
-          <div className="relative border overflow-auto flex-grow w-full flex justify-center items-center">
+          <div className="relative border overflow-auto flex-grow flex justify-center">
+            {" "}
+            {/* REMOVED items-center HERE */}
             <canvas
               ref={canvasRef}
-              className="border border-gray-300"
+              className="border border-gray-300 w-full h-auto"
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
