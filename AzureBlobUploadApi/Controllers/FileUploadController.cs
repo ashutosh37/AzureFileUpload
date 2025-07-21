@@ -795,12 +795,22 @@ namespace MyBlobUploadApi.Controllers
                         // For simplicity, let's assume coordinates are already adjusted or you'll adjust them.
                         // The frontendScale from PdfSharp might also need to be considered if coordinates are scaled.
                         // For now, using direct coordinates, you'll need to verify this.
-                        double asposeY = page.Rect.Height - redaction.Y - redaction.Height;
+                        const double frontendDpi = 96.0;
+                        const double pdfDpi = 72.0;
+                        const double scaleFactor = pdfDpi / frontendDpi; // 72.0 / 96.0 = 0.75
+
+                        double scaledX = redaction.X * scaleFactor;
+                        double scaledY = redaction.Y * scaleFactor;
+                        double scaledWidth = redaction.Width * scaleFactor;
+                        double scaledHeight = redaction.Height * scaleFactor;
+
+                        double asposeY = page.Rect.Height - scaledY - scaledHeight;
+
                         Aspose.Pdf.Rectangle rect = new Aspose.Pdf.Rectangle(
-                            redaction.X,
+                            scaledX,
                             asposeY,
-                            redaction.X + redaction.Width,
-                            asposeY + redaction.Height
+                            scaledX + scaledWidth,
+                            asposeY + scaledHeight
                         );
 
                         RedactionAnnotation redactionAnnotation = new RedactionAnnotation(page, rect);
