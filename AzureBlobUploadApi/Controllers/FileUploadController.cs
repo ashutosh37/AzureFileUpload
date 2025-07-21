@@ -795,22 +795,23 @@ namespace MyBlobUploadApi.Controllers
                         // For simplicity, let's assume coordinates are already adjusted or you'll adjust them.
                         // The frontendScale from PdfSharp might also need to be considered if coordinates are scaled.
                         // For now, using direct coordinates, you'll need to verify this.
-                        const double frontendDpi = 96.0;
-                        const double pdfDpi = 72.0;
-                        const double scaleFactor = pdfDpi / frontendDpi; // 72.0 / 96.0 = 0.75
+                        const double frontendPdfJsScale = 1.5; // This must match the scale used in PdfRedactorDialog.tsx
 
-                        double scaledX = redaction.X * scaleFactor;
-                        double scaledY = redaction.Y * scaleFactor;
-                        double scaledWidth = redaction.Width * scaleFactor;
-                        double scaledHeight = redaction.Height * scaleFactor;
+                        double unscaledX = redaction.X / frontendPdfJsScale;
+                        double unscaledY = redaction.Y / frontendPdfJsScale;
+                        double unscaledWidth = redaction.Width / frontendPdfJsScale;
+                        double unscaledHeight = redaction.Height / frontendPdfJsScale;
 
-                        double asposeY = page.Rect.Height - scaledY - scaledHeight;
+                        // Aspose.PDF uses a coordinate system where (0,0) is bottom-left.
+                        // Frontend coordinates are top-left.
+                        // Conversion: asposeY = PageHeight - unscaledY - unscaledHeight
+                        double asposeY = page.Rect.Height - unscaledY - unscaledHeight;
 
                         Aspose.Pdf.Rectangle rect = new Aspose.Pdf.Rectangle(
-                            scaledX,
+                            unscaledX,
                             asposeY,
-                            scaledX + scaledWidth,
-                            asposeY + scaledHeight
+                            unscaledX + unscaledWidth,
+                            asposeY + unscaledHeight
                         );
 
                         RedactionAnnotation redactionAnnotation = new RedactionAnnotation(page, rect);
