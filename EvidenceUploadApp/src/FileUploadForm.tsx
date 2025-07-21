@@ -820,7 +820,6 @@ function FileUploadForm({
           </div>
         </div>
       )}
-      ;
     </div>
   );
 }
