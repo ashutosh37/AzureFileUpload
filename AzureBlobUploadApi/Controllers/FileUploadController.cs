@@ -826,7 +826,7 @@ namespace MyBlobUploadApi.Controllers
                         redactionAnnotation.Redact();
                     }
                     // Apply redactions and flatten the PDF (burn-in)
-                    
+
                     // 4. Save the modified PDF to a MemoryStream
                     using (MemoryStream redactedPdfStream = new MemoryStream())
                     {

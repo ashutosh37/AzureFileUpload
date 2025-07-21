@@ -1,8 +1,8 @@
 // File: EvidenceUploadApp/src/components/PdfRedactorDialog.tsx
+
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import type { DisplayItem } from "../../src/interfaces";
 import * as pdfjsLib from "pdfjs-dist";
-// import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.js?url"; // Removed this import
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
@@ -19,7 +19,8 @@ interface PdfRedactorDialogProps {
     }[]
   ) => void;
   pdfFile: DisplayItem | null;
-  pdfUrl: string | null; // New prop for the SAS URL
+  pdfUrl: string | null;
+  isSaving: boolean; // NEW PROP
 }
 
 export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
@@ -28,6 +29,7 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
   onSave,
   pdfFile,
   pdfUrl,
+  isSaving, // Destructure the new prop
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null); // PDF.js PDFDocumentProxy
@@ -155,10 +157,6 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
     renderPage();
   }, [renderPage]);
 
-// File: EvidenceUploadApp/src/components/PdfRedactorDialog.tsx
-
-// ... (existing imports and code) ...
-
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
     setIsDrawing(true);
@@ -223,7 +221,7 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center items-center">
-      <div className="bg-white p-4 rounded-lg shadow-xl max-w-xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white p-4 rounded-lg shadow-xl max-w-2xl w-full max-h-full flex flex-col">
         <h2 className="text-xl font-bold mb-4">
           Redact PDF: {pdfFile?.displayName}
         </h2>
@@ -232,7 +230,7 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
           <div className="flex justify-between w-full mb-2">
             <button
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
+              disabled={currentPage === 1 || isSaving} // Disable while saving
               className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
             >
               Previous Page
@@ -246,15 +244,13 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
                   Math.min(pdfDoc?.numPages || 1, prev + 1)
                 )
               }
-              disabled={currentPage === (pdfDoc?.numPages || 1)}
+              disabled={currentPage === (pdfDoc?.numPages || 1) || isSaving} // Disable while saving
               className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
             >
               Next Page
             </button>
           </div>
-          <div className="relative border overflow-auto flex-grow flex justify-center">
-            {" "}
-            {/* REMOVED items-center HERE */}
+          <div className="relative border overflow-auto flex-grow w-full flex justify-center">
             <canvas
               ref={canvasRef}
               className="border border-gray-300 w-full h-auto"
@@ -269,22 +265,25 @@ export const PdfRedactorDialog: React.FC<PdfRedactorDialogProps> = ({
         <div className="flex justify-end space-x-2 mt-4">
           <button
             onClick={handleClearRedactions}
-            className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+            disabled={isSaving} // Disable while saving
+            className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
           >
             Clear Redactions
           </button>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+            disabled={isSaving} // Disable while saving
+            className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            disabled={redactionRects.length === 0}
+            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+            disabled={redactionRects.length === 0 || isSaving} // Disable while saving
           >
-            Save Redactions
+            {isSaving ? "Saving..." : "Save Redactions"}{" "}
+            {/* Text changes based on state */}
           </button>
         </div>
       </div>

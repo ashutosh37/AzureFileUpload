@@ -46,6 +46,9 @@ function FileUploadForm({
     useState<DisplayItem | null>(null);
   const [pdfRedactionUrl, setPdfRedactionUrl] = useState<string | null>(null);
 
+   const [isRedacting, setIsRedacting] = useState<boolean>(false); 
+
+
   // useEffect for acquiring an access token for the backend API
   useEffect(() => {
     if (accounts.length > 0) {
@@ -345,8 +348,9 @@ function FileUploadForm({
       setUploadStatus(
         `Applying redactions to ${selectedFileForRedaction.displayName}...`
       );
+      setIsRedacting(true); 
       setUploadError("");
-
+      
       // Call the backend API to apply redactions with coordinates
       await apiService.redactPdf(
         displayedContainerForFiles,
@@ -368,6 +372,7 @@ function FileUploadForm({
       );
     } finally {
       setTimeout(() => setUploadStatus(""), 3000);
+      setIsRedacting(false); 
     }
   };
 
@@ -571,7 +576,8 @@ function FileUploadForm({
                 onSave={handleSaveRedaction}
                 pdfFile={selectedFileForRedaction}
                 pdfUrl={pdfRedactionUrl}
-              />
+                isSaving={isRedacting}  // Pass the loading state to the dialog
+        />
             )}
           </div>
 
