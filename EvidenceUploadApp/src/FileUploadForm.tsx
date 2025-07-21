@@ -589,7 +589,7 @@ function FileUploadForm({
                 onChange={handleRootFolderSelectionChange}
                 className="shadow-sm appearance-none border border-gray-300 w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">Select a container (optional)</option>
+                <option value="">Select a Container</option>
                 {rootFolders.map((folderName) => (
                   <option key={folderName} value={folderName}>
                     {folderName.slice(0, -1)}
